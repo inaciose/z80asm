@@ -11,6 +11,7 @@ Optional
 Some help on using z80asm on RC2014 based system
 
 Sample "helloworld.asm":
+
 <code>
 org $8000
 
@@ -26,6 +27,7 @@ display:
 text:	
 	dm	"Hello, World",0 ; define string to display
 </code>
+
 Assemble the source to a binary file using z80asm:
 - z80asm -i helloworld.asm -o helloworld.bin
 Converting it to Intel Hex format (linux)
