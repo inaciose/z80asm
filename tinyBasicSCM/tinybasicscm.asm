@@ -1900,10 +1900,25 @@ EX0:    ;RST 28H                         ;IGNORE LEADING BLANKS
         PUSH DE                         ;SAVE POINTER
 EX1:
         LD A,(DE)                       ;IF FOUND '.' IN STRING
+        
+        ;DBG P1 SHOW STRING CHAR
+        ;CALL DBG_DisplayPutChar_asm
+        
         INC DE                          ;BEFORE ANY MISMATCH
         CP 23H                          ;WE DECLARE A MATCH
         JR Z,EX3
         INC HL                          ;HL->TABLE
+        
+        ;DBG
+        ;P2 SHOW TABLE CHAR
+        ;PUSH AF
+        ;LD A, (HL)
+        ;CALL DBG_DisplayPutChar_asm
+        ;LD A, ' '
+        ;CALL DBG_DisplayPutChar_asm
+        ;POP AF
+        ; DBG END
+
         CP (HL)                         ;IF MATCH, TEST NEXT
         JR Z,EX1
         LD A,7FH                        ;ELSE SEE IF BIT 7
@@ -1924,6 +1939,18 @@ EX4:
         CP (HL)                         ;FLAGGED BY BIT 7
         JR NC,EX4
 EX5:
+        ; DBG
+        ; print word pointed by hl
+        ; it have the jump address
+        ;PUSH HL
+        ;LD A,(HL)
+        ;CALL DBG_puthex_A
+        ;INC HL
+        ;LD A,(HL)
+        ;CALL DBG_puthex_A
+        ;POP HL
+        ; END DBG
+        
         LD A,(HL)                       ;LOAD HL WITH THE JUMP
         INC HL                          ;ADDRESS FROM THE TABLE
         LD L,(HL)
@@ -1932,16 +1959,74 @@ EX5:
         ;
         LD H,A
 
-        PUSH HL
-        PUSH DE
+        ; dbg bof
+        ;PUSH HL
+        ;PUSH DE
+        ;PUSH AF
+
+        ; LOAD HIGH BYTE VALUE
+        ;LD A,(HL)
+        ;PUSH HL
+        ;CALL DBG_puthex_A
+        ;POP HL
         
-        POP DE
-        POP HL
+        ;INC HL
+        ; LOAD LOW BYTE VALUE
+        ;LD A,(HL)
+        ;PUSH HL
+        ;CALL DBG_puthex_A
+
+        ;LD A, ' '
+        ;CALL DBG_DisplayPutChar_asm
+
+        ;POP HL
+
+        ;POP AF
+        ;POP DE
+        ;POP HL
+        ; dbg end
 
         POP AF                          ;CLEAN UP THE GABAGE
         JP (HL)                         ;AND WE GO DO IT
 ;-------------------------------------------------------------------------------
 ;///////////////////////////////////////////////////////////////////////////////
+;-------------------------------------------------------------------------------
+
+;--------------------------------------------
+; debug helpers
+
+DBG_puthex_A:
+  push AF
+  rrca
+  rrca
+  rrca
+  rrca
+  call DBG_puthex_base
+  pop AF 
+DBG_puthex_base:
+  and 0x0F
+  add 0x30  ; 0
+  cp 0x3A
+  jr C, puthex_AF
+  add 0x07
+puthex_AF:
+  ;ld(hl), a 
+  ;inc hl
+  call DBG_DisplayPutChar_asm
+  ret
+
+DBG_DisplayPutChar_asm:
+  PUSH HL
+  PUSH BC
+  LD C,$02 ; Function 2 = Output character
+  RST $30
+  POP BC
+  POP HL
+  RET
+
+;--------------------------------------------
+; end debug helpers
+
 ;-------------------------------------------------------------------------------
 ;COMPUTER SPECIFIC ROUTINES.
 ;-------------------------------------------------------------------------------
@@ -2028,4 +2113,5 @@ VARBGN: DS   55                         ;VARIABLE @(0)
 BUFFER: DS   64                         ;INPUT BUFFER
 BUFEND: DS   1                          ;BUFFER ENDS
 STKLMT: DS   1                          ;TOP LIMIT FOR STACK
+
         END
