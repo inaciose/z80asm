@@ -13,3 +13,25 @@ The routines based on the RST instruction must be converted to calls, because th
 The uart related code will be replaced by the SCM api to print a char, or get a char
 
 # Journal
+First try:
+Changed all "RST HH" by "CALL RSTHH"
+Replace code for uart init and outc & getc
+
+Compiler reports :
+"DWA:1: warning: byte value 262 (0x106) truncated"
+for several bytes.
+
+DWA is a macro
+
+DWA:    MACRO WHERE
+        DB   (WHERE >> 8) + 128
+        DB   WHERE & 0FFH
+        ENDM
+
+Its used near the final
+TAB1:                                   ;DIRECT COMMANDS
+        DB 'LIST'
+        DWA LIST
+
+
+- Failed

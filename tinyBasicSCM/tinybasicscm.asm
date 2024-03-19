@@ -66,7 +66,9 @@ ESC:            EQU     01BH            ; Escape
 DEL:            EQU     07FH            ; Delete
 
 ; Adjust to fit RAM mapping
-STACK:          EQU     03FFFH          ; STACK (Last RAM address)
+;STACK:          EQU     03FFFH          ; STACK (Last RAM address)
+; XSI REPLACED BY LINE
+STACK:          EQU     0DFFFH
 ;OCSW:           EQU     00800H          ;SWITCH FOR OUTPUT
 ; XSI REPLACED BY LINE
 OCSW:           EQU     0A000H          ;SWITCH FOR OUTPUT
@@ -85,7 +87,7 @@ TXTBGN:         EQU     OCSW+23         ;TEXT SAVE AREA BEGINS
 
 ;TXTEND:         EQU     00F00H          ;TEXT SAVE AREA ENDS
 ; XSI REPLACED BY LINE
-TXTEND:         EQU     0A700H          ;TEXT SAVE AREA ENDS
+TXTEND:         EQU     0AF00H          ;TEXT SAVE AREA ENDS
 
 
 ;*************************************************************
@@ -100,8 +102,13 @@ TXTEND:         EQU     0A700H          ;TEXT SAVE AREA ENDS
 ; IN THIS SECTION. THEY CAN BE REACHED WITH 'CALL'.
 ;*************************************************************
 
+;DWA:    MACRO WHERE
+;        DB   (WHERE >> 8) + 128
+;        DB   WHERE & 0FFH
+;        ENDM
+
 DWA:    MACRO WHERE
-        DB   (WHERE >> 8) + 128
+        DW   (WHERE - $) + 128
         DB   WHERE & 0FFH
         ENDM
 
@@ -1693,12 +1700,19 @@ PU1:
 ;*************************************************************
 
 INIT:
-        DI
+        ;DI
         ; XSI REPLACED BY LINE
         ;
 
         ; Comprobar si se encienden TODOS los leds
         LD A,0xff
+        OUT (0x00), A
+
+        LD DE,$02FF ; Delay time
+        LD C,$0A ; Function $0A = Delay
+        RST 30H ; Call API
+
+        LD A,0x01
         OUT (0x00), A
 
         ;CALL SERIAL_INIT        ;INITIALIZE THE SIO
