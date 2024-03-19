@@ -74,3 +74,37 @@ OK
 program hangs
 
 # 4
+I didnt realise yet, why it marks the 7 bit of HI address in the table to make it a jump address.
+does the table have entries that arent jump addresses
+checked the result of the macro in the original code and notice the pattern
+
+cmd  jadr radr
+list 8169 0169
+run  813c 0136
+next 8246 0246
+let  830a 030a
+
+next, changed the macro to:
+
+DWA:    MACRO WHERE
+        DB   WHERE >> 8
+        DB   WHERE & 0FFH
+        ENDM
+
+this way, the correct address is generated, but in reality the 7 bit is always high
+so i remove the code that reset it.
+
+;AND 7FH                         ;MASK OFF BIT 7
+
+- failed, not get expected response (program dont hangs, still running)
+screen:
+"Z80 TINY BASIC 2.0g
+PORTED BY DOUG GABBARD, 2017
+
+OK
+>let a = 10
+WHAT?
+
+OK
+>"
+
