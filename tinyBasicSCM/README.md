@@ -13,7 +13,7 @@ The routines based on the RST instruction must be converted to calls, because th
 The uart related code will be replaced by the SCM api to print a char, or get a char
 
 # Journal
-First try:
+# 1:
 Changed all "RST HH" by "CALL RSTHH"
 Replace code for uart init and outc & getc
 
@@ -35,3 +35,42 @@ TAB1:                                   ;DIRECT COMMANDS
 
 
 - Failed
+
+# 2
+hex converter origin set to 8500
+stack pointer uncommented
+macro changed to (per chatgpt sugestion):
+
+DWA:    MACRO WHERE
+        DW   (WHERE - $) + 128
+        DB   WHERE & 0FFH
+        ENDM
+
+explanation:
+"When you change the program's starting address from ORG 0000H to ORG 8500H, you need to make some adjustments to your code to ensure that the macro works correctly. This is because the DWA macro is using the absolute address of the memory location it is being called from. Here's a way to modify the macro to work regardless of the source address: (above code)"
+"When using WHERE - $, you are calculating the relative offset from the current program counter position ($) to the address where the DWA is called (WHERE). This will ensure the value is calculated correctly regardless of the originating address."
+
+- failed after press CR
+screen:
+"Z80 TINY BASIC 2.0g
+PORTED BY DOUG GABBARD, 2017
+
+OK
+>let a=5
+Trap
+PC:4453 AF:0D37 BC:0D3F DE:0D37 HL:4452 IX:8460 IY:0000 Flags:---H-PNC"
+
+# 3
+found 2 RST XX that need to be replaced
+- failed at press CR
+screen:
+"Z80 TINY BASIC 2.0g
+PORTED BY DOUG GABBARD, 2017
+
+OK
+>let a=10
+"
+
+program hangs
+
+# 4

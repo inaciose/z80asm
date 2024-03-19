@@ -117,7 +117,7 @@ DWA:    MACRO WHERE
         ORG  8500H
 
 START:
-        ;LD SP,STACK                     ;*** COLD START ***
+        LD SP,STACK                     ;*** COLD START ***
         ; XSI WE USE THE SCM SP
         LD A,0FFH
         JP INIT
@@ -298,7 +298,7 @@ SORRY:  DB "SORRY",CR
 ;*************************************************************
 
 RSTART:
-        ;LD SP,STACK
+        LD SP,STACK
         ; XSI REPLACED BY LINE
         ;
 
@@ -439,7 +439,9 @@ RUNSML:
         LD HL,TAB2-1                    ;FIND COMMAND IN TAB2
         JP EXEC                         ;AND EXECUTE IT
 GOTO:
-        RST 18H                         ;*** GOTO EXPR ***
+        ;RST 18H                         ;*** GOTO EXPR ***
+        ; XSI REPLACED BY LINE
+        CALL RST18
         PUSH DE                         ;SAVE FOR ERROR ROUTINE
         CALL ENDCHK                     ;MUST FIND A CR
         CALL FNDLN                      ;FIND THE TARGET LINE
@@ -509,7 +511,9 @@ PR0:
         CALL RST08
         DB '#'
         DB PR1-$-1
-        RST 18H                         ;YES, EVALUATE EXPR.
+        ;RST 18H                         ;YES, EVALUATE EXPR.
+        ; XSI REPLACED BY LINE
+        CALL RST18
         LD C,L                          ;AND SAVE IT IN C
         JR PR3                          ;LOOK FOR MORE TO PRINT
 PR1:
@@ -1336,7 +1340,9 @@ ERROR_ROUTINE:
         POP AF                          ;RESTORE THE CHARACTER
         LD (DE),A
         LD A,3FH                        ;PRINT A "?"
-        RST 10H
+        ;RST 10H
+        ; XSI REPLACED BY LINE
+        CALL RST10
         SUB A                           ;AND THE REST OF THE
         CALL PRTSTG                     ;LINE
         JP RSTART                       ;THEN RESTART
