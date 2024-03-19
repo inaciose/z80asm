@@ -1753,8 +1753,12 @@ OUTC2:
         POP AF                          ;RESTORE THE REGISTER
         ;OUT (SerialPort),A      ;SEND THE BYTE
         ; XSI REPLACED BY 2 LINES
+        PUSH HL
+        PUSH BC
         LD C,$02 ; Function 2 = Output character
         RST $30 ; Call API
+        POP BC
+        POP HL
 
         CP CR
         RET NZ
@@ -1927,6 +1931,13 @@ EX5:
         ; XSI REPLACED BY LINE
         ;
         LD H,A
+
+        PUSH HL
+        PUSH DE
+        
+        POP DE
+        POP HL
+
         POP AF                          ;CLEAN UP THE GABAGE
         JP (HL)                         ;AND WE GO DO IT
 ;-------------------------------------------------------------------------------
@@ -1957,6 +1968,7 @@ TX_RDY:
 ;-------------------------------------------------------------------------------
 RX_RDY:
 
+     PUSH HL
      PUSH BC
      LD C,$03 ; Function 3 = Input status
      RST $30 ; Call API
@@ -1968,6 +1980,7 @@ RX_RDY:
      CP 0xFF
 
      POP BC
+     POP HL
      RET
 
     ; This routine is for checking if a character is available over
@@ -1993,6 +2006,7 @@ no_char:
     ;-- Poner Z a uno
     CP A
     POP BC
+    POP HL
     ret
 
         RET
@@ -2002,9 +2016,14 @@ no_char:
 
 LSTROM:                                 ;ALL ABOVE CAN BE ROM
                     ;HERE DOWN MUST BE RAM
-        ORG  0A700H
+        ;ORG  0800H
+        ; XSI REPLACED BY LINE
+        ORG  0A000H
         DB   0x00
-        ORG  0D00H ; Last 256 bytes of RAM
+        ;ORG  0F00H ; Last 256 bytes of RAM
+        ; XSI REPLACED BY LINE
+        ORG  0D100H ; Last 256 bytes of RAM
+
 VARBGN: DS   55                         ;VARIABLE @(0)
 BUFFER: DS   64                         ;INPUT BUFFER
 BUFEND: DS   1                          ;BUFFER ENDS

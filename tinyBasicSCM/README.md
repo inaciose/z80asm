@@ -108,3 +108,20 @@ WHAT?
 OK
 >"
 
+# 5
+Changes in the ORG at the end of file
+        ORG  0A000H
+        ORG  0D100H ; Last 256 bytes of RAM
+- failed, not get expected response, accept prog lines, error on command (program dont hangs, still running)
+screen: 
+"Z80 TINY BASIC 2.0g
+PORTED BY DOUG GABBARD, 2017
+OK
+>10 a=5
+>20 a=a+1
+>30 print a
+>run
+WHAT?
+
+OK
+>"
