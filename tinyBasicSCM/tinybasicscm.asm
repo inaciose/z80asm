@@ -18,6 +18,11 @@
 ;                      10 OCTOBER,2017
 ;                  YEAH, 41 YEARS LATER....
 ;
+;                CONVERTED TO A SMC APP FOR RC2014
+;                IT RUNS FROM RAM, CAN BE LOADED
+;                IT DOES NOT RETURN TO SCM, (USE RESET BUTTON)
+;                       YEAH, MORE THAN 6 YEARS LATER
+;
 ;                         @COPYLEFT
 ;                   ALL WRONGS RESERVED
 ;
@@ -1712,15 +1717,15 @@ INIT:
         ;
 
         ; Comprobar si se encienden TODOS los leds
-        LD A,0xff
-        OUT (0x00), A
+        ;LD A,0xff
+        ;OUT (0x00), A
 
-        LD DE,$02FF ; Delay time
-        LD C,$0A ; Function $0A = Delay
-        RST 30H ; Call API
+        ;LD DE,$02FF ; Delay time
+        ;LD C,$0A ; Function $0A = Delay
+        ;RST 30H ; Call API
 
-        LD A,0x01
-        OUT (0x00), A
+        ;LD A,0x01
+        ;OUT (0x00), A
 
         ;CALL SERIAL_INIT        ;INITIALIZE THE SIO
         ; XSI REPLACED BY LINE
@@ -1774,7 +1779,7 @@ CHKIO:
 
         ;-- RC2014-DIGITAL OUTPUT BOARDD - LEDS
         ;-- Debug: Sacar el caracter recibido por los LEDs
-        out (0x00), A
+        ;out (0x00), A
 
         PUSH BC                         ;IF IT'S A LF, IGNORE AND RETURN
         LD B,A                          ; AS IF THERE WAS NO CHARACTER.
@@ -1958,33 +1963,6 @@ EX5:
         ; XSI REPLACED BY LINE
         ;
         LD H,A
-
-        ; dbg bof
-        ;PUSH HL
-        ;PUSH DE
-        ;PUSH AF
-
-        ; LOAD HIGH BYTE VALUE
-        ;LD A,(HL)
-        ;PUSH HL
-        ;CALL DBG_puthex_A
-        ;POP HL
-        
-        ;INC HL
-        ; LOAD LOW BYTE VALUE
-        ;LD A,(HL)
-        ;PUSH HL
-        ;CALL DBG_puthex_A
-
-        ;LD A, ' '
-        ;CALL DBG_DisplayPutChar_asm
-
-        ;POP HL
-
-        ;POP AF
-        ;POP DE
-        ;POP HL
-        ; dbg end
 
         POP AF                          ;CLEAN UP THE GABAGE
         JP (HL)                         ;AND WE GO DO IT

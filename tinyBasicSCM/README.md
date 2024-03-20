@@ -112,7 +112,7 @@ OK
 Changes in the ORG at the end of file
         ORG  0A000H
         ORG  0D100H ; Last 256 bytes of RAM
-        
+
 - failed, not get expected response, accept prog lines, error on command (program dont hangs, still running)
 screen: 
 "Z80 TINY BASIC 2.0g
@@ -131,7 +131,6 @@ OK
 changes, i dont know...
 some debug changes and debug helper code added
 notice that the commands must be all capital case
-
 - success (must be better tested)
 >LIST
   10 A=1
@@ -142,3 +141,9 @@ notice that the commands must be all capital case
 OK
 >RUN
 15AC     6
+
+# 7
+some clean up of debug code
+- sucess, project closed (but it must be better tested!), 
+note: it was save to sdcard and can be loaded from sdcard
+- tbas1.zta
