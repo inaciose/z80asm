@@ -147,3 +147,8 @@ some clean up of debug code
 - sucess, project closed (but it must be better tested!), 
 note: it was save to sdcard and can be loaded from sdcard
 - tbas1.zta
+
+# 8
+clean exit to SMC, translate comments, add more comments,
+add notice to mod on initial display text
+- success

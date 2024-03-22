@@ -1,5 +1,7 @@
 ;*************************************************************
 ;
+;                TINY BASIC FOR SCM, RC2014
+;
 ;                 TINY BASIC FOR ZILOG Z80
 ;                       VERSION 2.0
 ;                     BY LI-CHEN WANG
@@ -12,16 +14,18 @@
 ;                  MODIFIED AND TRANSLATED
 ;                    TO ZILOG MNEMONICS
 ;                      BY DOUG GABBARD
-;            www.retrodepot.net
+;                    www.retrodepot.net
 ;
-;           RELEASED TO THE PUBLIC
+;                   RELEASED TO THE PUBLIC
 ;                      10 OCTOBER,2017
 ;                  YEAH, 41 YEARS LATER....
 ;
-;                CONVERTED TO A SMC APP FOR RC2014
-;                IT RUNS FROM RAM, CAN BE LOADED
-;                IT DOES NOT RETURN TO SCM, (USE RESET BUTTON)
-;                       YEAH, MORE THAN 6 YEARS LATER
+;               CONVERTED TO SMC APP FOR RC2014
+;                       BY INACIOSE,XSI
+;                YEAH, MORE THAN 6 YEARS LATER
+;                IT RUNS FROM RAM, CAN BE LOADED,
+;                  TO RETURN TO SCM TYPE EXIT
+;            
 ;
 ;                         @COPYLEFT
 ;                   ALL WRONGS RESERVED
@@ -46,9 +50,11 @@
 ; Notes for JTFrame version:
 ;  Adapted to work with GNU z80asm
 ;  Added interrupt handling
-
+;
+; Notes for xsi SCM app version
 ; source grabed from the following url
 ; https://github.com/Obijuan/Z80-FPGA/tree/master/Tinybasic
+
 
 ; XSI RREMOVED
 ;SerialPort:     EQU     010H            ; This the serial output port
@@ -73,7 +79,7 @@ DEL:            EQU     07FH            ; Delete
 ; Adjust to fit RAM mapping
 ;STACK:          EQU     03FFFH          ; STACK (Last RAM address)
 ; XSI REPLACED BY LINE
-STACK:          EQU     0DFFFH
+STACK:          EQU     0DA00H
 ;OCSW:           EQU     00800H          ;SWITCH FOR OUTPUT
 ; XSI REPLACED BY LINE
 OCSW:           EQU     0A000H          ;SWITCH FOR OUTPUT
@@ -123,8 +129,10 @@ DWA:    MACRO WHERE
         ORG  8500H
 
 START:
+        ; XSI SAVE SP
+        LD (SRETSP),SP
         LD SP,STACK                     ;*** COLD START ***
-        ; XSI WE USE THE SCM SP
+        
         LD A,0FFH
         JP INIT
 
@@ -305,9 +313,6 @@ SORRY:  DB "SORRY",CR
 
 RSTART:
         LD SP,STACK
-        ; XSI REPLACED BY LINE
-        ;
-
 ST1:
         CALL CRLF                       ;AND JUMP TO HERE
         LD DE,OK                        ;DE->STRING
@@ -454,7 +459,25 @@ GOTO:
         JP NZ,AHOW                      ;NO SUCH LINE #
         POP AF                          ;CLEAR THE PUSH DE
         JR RUNTSL                       ;GO DO IT
+;*************************************************************
+;
+; SCM RELATED
+;
+;*************************************************************
 
+EXIT:
+        ; DISPLAY EXIT MESSAGE
+        LD DE,MSGX
+        CALL PRTSTG
+
+        ; RETRIEVE SAVED SP
+        LD SP,(SRETSP)
+
+        ; RETURN TO SCM
+        RET
+
+        ; EXIT MESSAGE
+MSGX:   DB 'Bye!',CR
 ;*************************************************************
 ;
 ; *** LIST *** & PRINT ***
@@ -1806,8 +1829,8 @@ CI1:
 
 
 MSG1:   DB   ESC,"[2J",ESC,"[H"         ;SCREEN CLEAR
-        DB   'Z80 TINY BASIC 2.0g',CR       ;BOOT MESSAGE
-MSG2:   DB   'PORTED BY DOUG GABBARD, 2017',CR
+        DB   'Z80 TINY BASIC 2.0g SCM',CR       ;BOOT MESSAGE
+MSG2:   DB   'PORTED BY DOUG GABBARD, 2017. SCM BY XSI, 2024',CR
 
 ;*************************************************************
 ;
@@ -1843,6 +1866,8 @@ TAB1:                                   ;DIRECT COMMANDS
         DWA RUN
         DB 'NEW'
         DWA NEW
+        DB 'EXIT'
+        DWA EXIT
 TAB2:                                   ;DIRECT/STATEMENT
         DB 'NEXT'
         DWA NEXT
@@ -1972,35 +1997,36 @@ EX5:
 
 ;--------------------------------------------
 ; debug helpers
+; may be commented out
 
 DBG_puthex_A:
-  push AF
-  rrca
-  rrca
-  rrca
-  rrca
-  call DBG_puthex_base
-  pop AF 
+        push AF
+        rrca
+        rrca
+        rrca
+        rrca
+        call DBG_puthex_base
+        pop AF 
 DBG_puthex_base:
-  and 0x0F
-  add 0x30  ; 0
-  cp 0x3A
-  jr C, puthex_AF
-  add 0x07
+        and 0x0F
+        add 0x30  ; 0
+        cp 0x3A
+        jr C, puthex_AF
+        add 0x07
 puthex_AF:
-  ;ld(hl), a 
-  ;inc hl
-  call DBG_DisplayPutChar_asm
-  ret
+        ;ld(hl), a 
+        ;inc hl
+        call DBG_DisplayPutChar_asm
+        ret
 
 DBG_DisplayPutChar_asm:
-  PUSH HL
-  PUSH BC
-  LD C,$02 ; Function 2 = Output character
-  RST $30
-  POP BC
-  POP HL
-  RET
+        PUSH HL
+        PUSH BC
+        LD C,$02 ; Function 2 = Output character
+        RST $30
+        POP BC
+        POP HL
+        RET
 
 ;--------------------------------------------
 ; end debug helpers
@@ -2009,76 +2035,70 @@ DBG_DisplayPutChar_asm:
 ;COMPUTER SPECIFIC ROUTINES.
 ;-------------------------------------------------------------------------------
 SERIAL_INIT:
-
-    ; This routine is for initializing your serial port.
-
-;-- Z80-FPGA: No necesitamos inicializar nada del puerto serie
-
+        ; This routine is for initializing your serial port.
+        ; USING SCM API, NO INITIALIZATION NEEDED
         RET
 ;-------------------------------------------------------------------------------
 TX_RDY:
-    ; This routine is checking if the Serial Port is ready to send
-    ; a character.
+        ; This routine is checking if the Serial Port is ready to send
+        ; a character.
 
-    ;-- Leer registro de estaus de la UART
-    ;-- ¿Se puede enviar?
-    ;IN A, (SERIAL_STATUS)
-    ;AND 0x01
-    ;JP NZ, TX_RDY ;-- No--> Esperar
-    RET
-    ;-- Listo para transmitir
+        ; READ UART STATUS FOR TX READY
+        ;IN A, (SERIAL_STATUS)
+        ;AND 0x01
+        ;JP NZ, TX_RDY ; NO > WHAIT
+        ;-- READY TO TX
+        RET
 
 ;-------------------------------------------------------------------------------
 RX_RDY:
+        ; This routine is for checking if a character is available over
+        ; serial. If a character is available, it returns to the calling
+        ; function with the character in 'A' and the Z-flag reset.
+        ; However, if a character is not available, it returns with the
+        ; Z-flag set.
 
-     PUSH HL
-     PUSH BC
-     LD C,$03 ; Function 3 = Input status
-     RST $30 ; Call API
-     JR Z,no_char
+        PUSH HL
+        PUSH BC
 
-     LD C,$01 ; Function 1 = Input character
-     RST $30 ; Call API
+        ; CHECK INCOMING CHAR AVAILABLE
+        ;in A, (SERIAL_STATUS)
+        ;and 0x2
+        ;jr z, NO_CHAR ; NO CHAR JUMP
 
-     CP 0xFF
+        LD C,$03 ; Function 3 = Input status
+        RST $30 ; Call API
+        JR Z, NO_CHAR
 
-     POP BC
-     POP HL
-     RET
+        ; READ INCOMING CHAR
+        ;in A, (SerialPort)
 
-    ; This routine is for checking if a character is available over
-    ; serial. If a character is available, it returns to the calling
-    ; function with the character in 'A' and the Z-flag reset.
-    ; However, if a character is not available, it returns with the
-    ; Z-flag set.
+        LD C,$01 ; Function 1 = Input character
+        RST $30 ; Call API
 
-    ;-- Comprobar si hay caracter disponible
-    ;in A, (SERIAL_STATUS)
-    ;and 0x2
-    ;jr z, no_char ;-- No hay
+        ; RETURN, REG A HOLDS THE RECEIVED CHAR
+        ; RESET Z, NZ, Z=0
+        CP 0xFF
 
-    ;-- Leer el caracter que ha llegado
-    ;in A, (SerialPort)
+        POP BC
+        POP HL
+        RET
 
-    ;-- Retornar. A contiene el caracter recibido
-    ;-- Z debe ser 0
-    ;RET
-
-no_char:
-    ;-- No hay caracter disponible
-    ;-- Poner Z a uno
-    CP A
-    POP BC
-    POP HL
-    ret
+NO_CHAR:
+        ;-- NO CHAR AVAILABLE
+        ;-- SET Z = 1
+        CP A
+        POP BC
+        POP HL
+        ret
 
         RET
 ;-------------------------------------------------------------------------------
 ;///////////////////////////////////////////////////////////////////////////////
 ;-------------------------------------------------------------------------------
 
-LSTROM:                                 ;ALL ABOVE CAN BE ROM
-                    ;HERE DOWN MUST BE RAM
+LSTROM: ;ALL ABOVE CAN BE ROM
+        ;HERE DOWN MUST BE RAM
         ;ORG  0800H
         ; XSI REPLACED BY LINE
         ORG  0A000H
@@ -2091,5 +2111,5 @@ VARBGN: DS   55                         ;VARIABLE @(0)
 BUFFER: DS   64                         ;INPUT BUFFER
 BUFEND: DS   1                          ;BUFFER ENDS
 STKLMT: DS   1                          ;TOP LIMIT FOR STACK
-
+SRETSP: DS   2                          ;XSI SAVE SCM SP
         END
