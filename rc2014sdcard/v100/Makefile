@@ -7,4 +7,4 @@ all:
 	srec_cat $(SRCF).bin -binary -offset 0x8000 -output $(SRCF).hex -intel -address-length=2
 
 clean:
-	rm -f *.bin *.lst
+	rm -f *.bin *.lst *.hex

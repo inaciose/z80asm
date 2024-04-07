@@ -9,11 +9,10 @@
 ; v1.0c  - debug output commented
 ; v1.0c1 - convert from asm80.com to z80asm (just one line)
 ;        - dont work with org defined for rodata
-; v1.01  - store on memory num bytes loaded
+;
 
-
-                    ORG   $8000   
-;                    ORG   $2000
+;                    ORG   $8000   
+                    ORG   $2000
 
                     ; sdcard io addresses
 SDCRS:              EQU   0x40   
@@ -1093,17 +1092,15 @@ STARTRFD_OK:
                     ld h, d
                     ld l, e
                     
-                    ld de, 0x0000
+                    
 RFDLOOPADDR:      
                     ; wait 1 ms before any
                     ; in or out to SD card
                     ;push bc
                     push hl
-                    push de
                     ld  de, 1
                     ld  c, $0a
                     rst $30
-                    pop de
                     pop hl
                     ;pop bc
                     
@@ -1134,15 +1131,12 @@ RFDLOOPADDR:
                     ; in or out to SD card
                     ;push bc
                     push hl
-                    push de
                     ld  de, 1
                     ld  c, $0a
                     rst $30
-                    pop de
                     pop hl
                     ;pop bc
 
-                    inc de
                     ; get one memory byte
                     ; c have the SDC address for WD
                     ld   c,SDCWD 
@@ -1152,15 +1146,6 @@ RFDLOOPADDR:
 ENDRFD_OK:
                     ; the file is loaded
                     ;
-
-                    ; store num bytes loaded
-                    push hl
-                    ld hl, NUM_BYTES
-                    ld (hl),d
-                    inc hl
-                    ld (hl),e
-                    pop hl
-
                     ; display end message
                     ;
                     ld   de,STR_LOADOK
@@ -1214,6 +1199,23 @@ SFNLOOPCHAR:
 ; 
 ; STRINGS
 ; 
+;--------------------------------------------
+
+
+STRLEN:              
+            PUSH    hl 
+            LD      b,0 
+STRLEN00:            
+            LD      a,(hl) 
+            CP      0 ;"\0"
+            JR      z,STRLEN01 
+            INC     hl 
+            INC     b 
+            JR      STRLEN00 
+STRLEN01:            
+            POP     hl 
+            LD      a,b 
+            RET      
 ;--------------------------------------------
 
 STRCMP:
@@ -1321,6 +1323,29 @@ HEX2NUM1:           SUB     "0"
 
 ;--------------------------------------------
 
+STRFHEX:             
+; Convert byte in A to two-char hex and append to HL
+            LD      c,a ; a = number to convert
+            CALL    NUM1 
+            LD      (hl),a 
+            INC     hl 
+            LD      a,c 
+            CALL    NUM2 
+            LD      (hl),a 
+            INC     hl 
+            RET      
+NUM1:       RRA      
+            RRA      
+            RRA      
+            RRA      
+NUM2:       OR      $F0 
+            DAA      
+            ADD     a,$A0 
+            ADC     a,$40 ; Ascii hex at this point (0 to F)
+            RET      
+
+;--------------------------------------------
+
 OUTCHAR:      
                     ; print char on
                     ; register A
@@ -1377,7 +1402,6 @@ CMD_LIST:            DB      "LIST",0
 ;                    ORG    $83E0
                     ORG    $FAE0
 RAMDATA:
-NUM_BYTES:          DS $02 ; 2 bytes
 FILE_START:         DS $02 ; 2 bytes
 FILE_LEN:           DS $02 ; 2 bytes
 FILE_CMD:           DS $10 ; 16 bytes

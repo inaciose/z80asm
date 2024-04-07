@@ -1,4 +1,4 @@
-# RC2014 ZTGsdcard SCM app v1.01 (dev)
+# RC2014 ZTGsdcard SCM app
 Z80 RC2014 SCM app to use a sd card to load, save, list and remove files.
 Requires the ZTGsdcard board.
 
