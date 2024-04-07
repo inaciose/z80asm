@@ -12,8 +12,8 @@
 ; v1.01  - store on memory num bytes loaded
 
 
-                    ORG   $8000   
-;                    ORG   $2000
+;                    ORG   $8000   
+                    ORG   $2000
 
                     ; sdcard io addresses
 SDCRS:              EQU   0x40   
