@@ -5,4 +5,4 @@ basic.bin: tinybasicscm.asm
 	srec_cat tinybasicscm.bin -binary -offset 0x8500 -output tinybasicscm.hex -intel -address-length=2
 
 clean:
-	rm -f tinybasicscm.bin tinybasicscm.lst tinybasicscm.hex
+	rm -f tinybasicscm.bin tinybasicscm.lst
