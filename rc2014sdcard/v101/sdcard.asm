@@ -8,15 +8,12 @@
 ; v1.0b  - remove added
 ; v1.0c  - debug output commented
 ; v1.0c1 - convert from asm80.com to z80asm (just one line)
-;        - dont worked with org defined for rodata
+;        - dont work with org defined for rodata
 ; v1.01  - store on memory num bytes loaded
-; v1.02 - jump table at the beguin
-;          delayde, new routine used on read file
-;          equ for sdcard commands
 
 
-                    ORG   $8000   
-;                    ORG   $2000
+;                    ORG   $8000   
+                    ORG   $2000
 
                     ; sdcard io addresses
 SDCRS:              EQU   0x40   
@@ -31,32 +28,9 @@ SDCSRFN:            EQU   0x03
 SDCSRFD:            EQU   0x05
 SDCSDIR:            EQU   0x10
 SDCSDFN:            EQU   0x20
-
-                    ; sdcard io commands
-SDCMDRESET:          EQU   0x0f
-SDCMDLOAD:           EQU   0x0d
-SDCMDSAVE:           EQU   0x0c
-SDCMDWRITE:          EQU   0x
-SDCMDWREND:          EQU   0x0b
-SDCMDLIST:           EQU   0x0e
-SDCMDDEL:            EQU   0x0a
-
-;
-;
-; try to mantain a stable
-; address to calling routines
-; api call jump table 
-;
-CLIENTRY:           jp MAIN
-APISAVE:            jp STARTWFN
-APILOAD:            jp STARTRFN
-APIDEL:             jp STARTDFN
-APILIST:            jp STARTLSTF
-APIREN:             jp STARTRNFN
-APICOPY:            jp STARTCPFN
-APICHDIR:           jp STARTCDDN
-APIMKDIR:           jp STARTMKDN
-APIRMDIR:           jp STARTRMDN
+                    ;
+;PRGADDR:            EQU   0xD000   
+;PRGLEN:             EQU   0x03   
 
 ; just info
 MAIN:        
@@ -401,9 +375,8 @@ STARTDFN_OK1:
                     pop hl
 
 
-                    ; start delete file
-                    ; load cmd code in a, see equs
-                    ld   a,SDCMDDEL   
+                     ; start delete file
+                    ld   a,$a   
                     out   (SDCWC),a
                     
                     ;
@@ -563,9 +536,8 @@ STARTLSTF_OK1:
                     rst $30
                     pop hl
 
-                    ; start directory list
-                    ; load cmd code in a, see equs
-                    ld   a,SDCMDLIST   
+                     ; start directory list
+                    ld   a,$e   
                     out   (SDCWC),a
                     
                     ;
@@ -712,9 +684,8 @@ STARTWFN_OK1:
                     rst $30
                     pop hl
 
-                    ; start save file process
-                    ; load cmd code in a, see equs
-                    ld   a,SDCMDSAVE   
+                    ; start write file
+                    ld   a,$c   
                     out   (SDCWC),a
                     
                     ;
@@ -889,8 +860,7 @@ WFDLOOPADDR:
                     ;pop de
 
                     ; end file write
-                    ; load cmd code in a, see equs
-                    ld   a,SDCMDWREND ;0x0b   
+                    ld   a,$b   
                     out  (SDCWC),a   
 
 ; just info
@@ -1003,9 +973,8 @@ STARTRFN_OK1:
                     rst $30
                     pop hl
 
-                    ; start load file
-                    ; load cmd code in a, see equs
-                    ld   a,SDCMDLOAD ; 0x0d   
+                     ; start load file
+                    ld   a,$d   
                     out   (SDCWC),a
                     
                     ;
@@ -1128,27 +1097,23 @@ STARTRFD_OK:
 RFDLOOPADDR:      
                     ; wait 1 ms before any
                     ; in or out to SD card
-                    ;;push bc
-                    ;push hl
-                    ;push de
-                    ;ld  de, 1
-                    ;ld  c, $0a
-                    ;rst $30
-                    ;pop de
-                    ;pop hl
-                    ;;pop bc
-
+                    ;push bc
+                    push hl
                     push de
-                    ld de,0x00ff
-                    call DELAYDE
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
                     pop de
-
+                    pop hl
+                    ;pop bc
+                    
                     ; check if we have
                     ; any byte available
 
                     ; get status
                     in   a,(SDCRS)
-                                        
+                    
+                    
                     ; display status
                     ;call OUTCHAR
                     ;push af
@@ -1167,29 +1132,17 @@ RFDLOOPADDR:
 
                     ; wait 1 ms before any
                     ; in or out to SD card
-                    ;;push bc
-                    ;push hl
-                    ;push de
-                    ;ld  de, 1
-                    ;ld  c, $0a
-                    ;rst $30
-                    ;pop de
-                    ;pop hl
+                    ;push bc
+                    push hl
+                    push de
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop de
+                    pop hl
                     ;pop bc
 
-                    push de
-                    ld de,0x00ff
-                    call DELAYDE
-                    pop de
-
-                    ; increment bytes loaded counter
                     inc de
-
-                    ; b will be decremented
-                    ; never gave problems with
-                    ; out this line. Let see now.
-                    ld b, 0xff
-
                     ; get one memory byte
                     ; c have the SDC address for WD
                     ld   c,SDCWD 
@@ -1219,51 +1172,8 @@ ENDRFD_OK:
                     ; return
                     ret
 
-;--------------------------------------------------------
-;
-; Rename file on SD
-;
-;--------------------------------------------------------
-STARTRNFN:
-                        ret
-;--------------------------------------------------------
-;
-; Copy file on SD
-;
-;--------------------------------------------------------
-STARTCPFN:
-                        ret
-;--------------------------------------------------------
-;
-; CD on SD
-;
-;--------------------------------------------------------
-STARTCDDN:
-                        ret
-;--------------------------------------------------------
-;
-; Make directory on SD (mkdir)
-;
-;--------------------------------------------------------
-STARTMKDN:
-                        ret
-;--------------------------------------------------------
-;
-; Remove directory on SD (mkdir)
-;
-;--------------------------------------------------------
-STARTRMDN:
-                        ret
-;--------------------------------------------------------
 ; 
-; send file name or directory name
-;
-; todo 
-; input: hl with pointer to string name.
-; then can be used in a generic way
-;
-;--------------------------------------------------------
-
+; 
 SENDFNAME:      
                     ; point hl to start of string
                     ld   hl,FILE_NAME   
@@ -1426,19 +1336,6 @@ OUTCHAR:
 
 ;--------------------------------------------
 
-;--------------------------------------------
-;
-; delay (input: de)
-;
-;--------------------------------------------
-
-DELAYDE:
-                        dec de
-                        ld a,d
-                        or e
-                        jr nz,DELAYDE
-                        ret
-
 ; 
 ; 
 ; 
@@ -1484,7 +1381,6 @@ NUM_BYTES:          DS $02 ; 2 bytes
 FILE_START:         DS $02 ; 2 bytes
 FILE_LEN:           DS $02 ; 2 bytes
 FILE_CMD:           DS $10 ; 16 bytes
-FILE_NAME:          DS $21 ; 33 bytes
-FILE_NAME2:         DS $21 ; 33 bytes
+FILE_NAME:          DS $41 ; 65 bytes
 LINETMP:            DS $41 ; 65 bytes
 LINEBUF:            DS $81 ; 129 bytes

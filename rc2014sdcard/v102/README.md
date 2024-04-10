@@ -56,5 +56,4 @@ if there is an sdcard interface error, quit the program, then reset the interfac
 DONE - rewrite to allow other programs calling routines at fixed addresses with conventions for calling, args data and nareturning data
 make load quickier, done a litle bit.
 make save quickier
-add commands for more operations with changes in the status codes received from sdcard interface 
 
