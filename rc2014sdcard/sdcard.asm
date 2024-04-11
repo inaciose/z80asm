@@ -24,6 +24,7 @@
 ; v1.04e - add cd (change directory)
 ; v1.04f - add cwd (get current working directory full path name)
 ;        - add loop for the cli (require enter "exit" to return to SCM)
+; v1.04g - add reset (reset the sd card interface, same as "o 40 f")
 ;
                     ORG   $8000   
 ;                    ORG   $2000
@@ -87,6 +88,7 @@ APICWD:             jp STARTCWDN
 APIMKDIR:           jp STARTMKDN
 APIRMDIR:           jp STARTRMDN
 APIEXIST:           jp STARTEXFN
+APIRESET:           jp STARTRESET
 
 ; just info
 MAIN:        
@@ -189,7 +191,7 @@ MAIN_CHK3:
                     ; dispatch
                     call STARTRNFN
                     
-                    jr MAIN_END
+                    jp MAIN_END
 
 MAIN_CHK4:
                     ld hl, CMD_COPY
@@ -274,8 +276,17 @@ MAIN_CHK10:
                     ; dispatch
                     jr MAIN_RETURN
 
-
 MAIN_CHK11:
+                    ld hl, CMD_RESET
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK12
+                    
+                    ; dispatch
+                    call STARTRESET
+
+MAIN_CHK12:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -2414,8 +2425,67 @@ STARTRMDN_OK:
                     ; call api
                     rst   $30
 
+                    ret
+
+;--------------------------------------------------------
+;
+; Reset the SD card interface, status > 0x00 (reset)
+;
+;--------------------------------------------------------
+STARTRESET:
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; send reset command
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDRESET   
+                    out   (SDCWC),a
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 32 exit
+                    cp   SDCSIDL
+                    jr   z,STARTRESET_OK
+
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return                    
+                    ret              
+
+STARTRESET_OK:                    
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_RESETOK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
 
                     ret
+
 ;--------------------------------------------------------
 ;
 ; Check if file exists
@@ -2426,10 +2496,6 @@ STARTEXFN:
 ;--------------------------------------------------------
 ; 
 ; send file name or directory name
-;
-; todo 
-; input: hl with pointer to string name.
-; then can be used in a generic way
 ;
 ;--------------------------------------------------------
 
@@ -2652,7 +2718,7 @@ STR_MKDIROK:          DB      "Directory created\n\r",0
 STR_RMDIROK:          DB      "Directory removed\n\r",0
 STR_CHDIROK:          DB      "Directory changed\n\r",0
 STR_CWDOK:            DB      "Current directory\n\r",0
-STR_RST:              DB      "Interface reset\n\r",0
+STR_RESETOK:          DB      "SD card Interface reset\n\r",0
 
 CMD_LOAD:            DB      "LOAD",0
 CMD_SAVE:            DB      "SAVE",0
