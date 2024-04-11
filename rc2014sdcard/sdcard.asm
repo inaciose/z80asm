@@ -19,6 +19,8 @@
 ; v1.04b - add copy, strange behavior on list after one copy. 
 ;          stm32 crash on list. need to del (on cli) the new copied file
 ; v1.04c - add mkdir & rmdir. stm32 still crash on list
+; v1.04d - add a litle more time to wait for list generation
+;          stm32 firmware v1.04 dont crash on list
 
                     ORG   $8000   
 ;                    ORG   $2000
@@ -713,7 +715,7 @@ STARTLSTF_OK1:
                     ; wait many ms before any
                     ; in or out to SD card
                     push hl
-                    ld  de, 1000
+                    ld  de, 200
                     ld  c, $0a
                     rst $30
                     pop hl
