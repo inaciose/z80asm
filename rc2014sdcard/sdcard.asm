@@ -16,6 +16,9 @@
 ; v1.03  - sdcard firmware status code changed
 ;          stm32 firmware ztgsdcard2 v1.01
 ; v1.04a - rename
+; v1.04b - copy, strange behavior on list after one copy. 
+;          stm32 crash on list. need to del (on cli) the new copied file
+;
 
                     ORG   $8000   
 ;                    ORG   $2000
@@ -124,7 +127,7 @@ MAIN:
                     call OUTCHAR                    
 
                     call LINE_PARSE
-                     
+
                     ;
                     ; dispatch cmd
                     ; by sequentialy 
@@ -153,7 +156,7 @@ MAIN_CHK1:
                     ; dispatch
                     call STARTLSTF
                     
-                    jr MAIN_END
+                    jp MAIN_END
 
 MAIN_CHK2:
                     ld hl, CMD_LOAD
@@ -277,34 +280,32 @@ LINE_PARSE:
                     ld de,FILE_NAME
                     call CLI_GETSTRARG
 
-                    ; saved registers for call compare
+                    ; save registers and call compare
                     push hl
-                    push de
- 
+                    push de 
                     ld hl, CMD_REN
                     ld de, FILE_CMD
                     call STRCMP
+                    pop de                    
+                    pop hl                  
                     jr nz, LINE_PARSE1
 
                     ; dispatch
                     ; 2 file names
                     jr LINE_PARSE2
 LINE_PARSE1: 
+                    ; save registers and call compare
+                    push hl
+                    push de 
                     ld hl, CMD_COPY
                     ld de, FILE_CMD
                     call STRCMP
-                    ; restore saved registers for compare
                     pop de                    
                     pop hl
                     jr nz, LINE_PARSE3
 LINE_PARSE2:
-
                      ; dispatch
                     ; 2 file names
-                    ; restore saved registers for compare
-                    pop de
-                    pop hl
-
                     ; hl pointer to current location on cli 
                     ; set de to the start of the second
                     ; filename string
@@ -1540,14 +1541,196 @@ STARTRNFN_OK:
                     ; call api
                     rst   $30
 
-                        ret
+                    ret
 ;--------------------------------------------------------
 ;
 ; Copy file on SD
 ;
 ;--------------------------------------------------------
 STARTCPFN:
-                        ret
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTCPFN_OK1 
+; just info
+STARTCPFN_FAIL1:
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret
+
+STARTCPFN_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+
+                    ; start rename file
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDCOPY   
+                    out   (SDCWC),a
+                    
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ;ld   de,STR_CHK_NAME
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 40 exit
+                    cp   SDCSCPYFN1
+                    jr   z,STARTCPFN_OK2
+
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return                    
+                    ret                     
+                    
+STARTCPFN_OK2:
+
+                    ;
+                    ; ready to send the
+                    ; source file name
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ;
+                    ; send the source file name
+                    ;
+                    push bc
+                    push hl
+                    ld   hl,FILE_NAME
+                    call SENDFNAME   
+                    pop  hl
+                    pop  bc
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 10
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is rn file destination state ?
+                    cp   SDCSCPYFN2
+                    jr   z, STARTCPFN_OK3
+
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret
+
+STARTCPFN_OK3:
+                    ; ready to send the
+                    ; destination file name
+
+                    push bc
+                    push hl
+                    ld   hl,FILE_NAME1
+                    call SENDFNAME   
+                    pop  hl
+                    pop  bc
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 20
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is rn file destination state ?
+                    cp   SDCSIDL
+                    jr   z, STARTCPFN_OK
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; return
+                    ret
+
+STARTCPFN_OK:                    
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_COPYOK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ret
 ;--------------------------------------------------------
 ;
 ; CD on SD
