@@ -15,6 +15,7 @@
 ;          equ for sdcard commands
 ; v1.03  - sdcard firmware status code changed
 ;          stm32 firmware ztgsdcard2 v1.01
+; v1.04a - rename
 
                     ORG   $8000   
 ;                    ORG   $2000
@@ -23,15 +24,24 @@
 SDCRS:              EQU   0x40   
 SDCRD:              EQU   0x41   
 SDCWC:              EQU   0x40   
-SDCWD:              EQU   0x41   
+SDCWD:              EQU   0x41 
+
                     ; sdcard io status
-SDCSIDL:            EQU   0x00   
-SDCSWFN:            EQU   0x10   
-SDCSWFD:            EQU   0x12
-SDCSRFN:            EQU   0x08   
-SDCSRFD:            EQU   0x0a
-SDCSDIR:            EQU   0x20
-SDCSDFN:            EQU   0x28
+SDCSIDL:            EQU   0x00 ;  
+SDCSWFN:            EQU   0x10 ; write file, send name 
+SDCSWFD:            EQU   0x12 ; write file, send data
+SDCSRFN:            EQU   0x08 ; read file, send name 
+SDCSRFD:            EQU   0x0a ; read file, read data
+SDCSDIR:            EQU   0x20 ; read data (dir list data)
+SDCSDFN:            EQU   0x28 ; delete file, send name
+SDCSRENFN1:         EQU   0x30 ; rename, send source 
+SDCSRENFN2:         EQU   0x38 ; rename, send dest
+SDCSCPYFN1:         EQU   0x40 ; copy, send source 
+SDCSCPYFN2:         EQU   0x48 ; copy, send dest
+SDCSEXISFN:         EQU   0x80 ; exist file?, send name 
+SDCSMKDFN:          EQU   0x50 ; mkdir, send name
+SDCSRNDFN:          EQU   0x58 ; rmdir, send name
+SDCSCHDFN:          EQU   0x78 ; chdir, send name
 
                     ; sdcard io commands
 SDCMDRESET:          EQU   0x0f
@@ -41,6 +51,13 @@ SDCMDSAVE:           EQU   0x0c
 SDCMDWREND:          EQU   0x0b
 SDCMDLIST:           EQU   0x0e
 SDCMDDEL:            EQU   0x0a
+SDCMDREN:            EQU   0x10
+SDCMDCOPY:           EQU   0x11
+SDCMDEXIST:          EQU   0x12
+SDCMDMKDIR:          EQU   0x13
+SDCMDRMDIR:          EQU   0x14
+SDCMDCD:             EQU   0x15
+
 
 ;
 ;
@@ -107,7 +124,7 @@ MAIN:
                     call OUTCHAR                    
 
                     call LINE_PARSE
-                    
+                     
                     ;
                     ; dispatch cmd
                     ; by sequentialy 
@@ -124,7 +141,7 @@ MAIN:
                     ; dispatch
                     call STARTDFN
 
-                    jr MAIN_END
+                    jp MAIN_END
                     
 MAIN_CHK1:
                     ld hl, CMD_LIST
@@ -151,6 +168,78 @@ MAIN_CHK2:
                     jr MAIN_END
 
 MAIN_CHK3:
+                    ld hl, CMD_REN
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK4
+                    
+                    ; dispatch
+                    call STARTRNFN
+                    
+                    jr MAIN_END
+
+MAIN_CHK4:
+                    ld hl, CMD_COPY
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK5
+                    
+                    ; dispatch
+                    call STARTCPFN
+                    
+                    jr MAIN_END
+
+MAIN_CHK5:
+                    ld hl, CMD_EXIST
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK6
+                    
+                    ; dispatch
+                    call STARTEXFN
+                    
+                    jr MAIN_END
+
+MAIN_CHK6:
+                    ld hl, CMD_MKDIR
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK7
+                    
+                    ; dispatch
+                    call STARTMKDN
+                    
+                    jr MAIN_END
+
+MAIN_CHK7:
+                    ld hl, CMD_RMDIR
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK8
+                    
+                    ; dispatch
+                    call STARTRMDN
+                    
+                    jr MAIN_END
+
+MAIN_CHK8:
+                    ld hl, CMD_CD
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK9
+                    
+                    ; dispatch
+                    call STARTCDDN
+                    
+                    jr MAIN_END
+
+MAIN_CHK9:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -183,12 +272,52 @@ LINE_PARSE:
                     call CONVERTTOUPPER
                     pop hl
                     
-
                     ; hl pointer to current location on cli 
                     ; set de to the start of filename string
                     ld de,FILE_NAME
                     call CLI_GETSTRARG
 
+                    ; saved registers for call compare
+                    push hl
+                    push de
+ 
+                    ld hl, CMD_REN
+                    ld de, FILE_CMD
+                    call STRCMP
+                    jr nz, LINE_PARSE1
+
+                    ; dispatch
+                    ; 2 file names
+                    jr LINE_PARSE2
+LINE_PARSE1: 
+                    ld hl, CMD_COPY
+                    ld de, FILE_CMD
+                    call STRCMP
+                    ; restore saved registers for compare
+                    pop de                    
+                    pop hl
+                    jr nz, LINE_PARSE3
+LINE_PARSE2:
+
+                     ; dispatch
+                    ; 2 file names
+                    ; restore saved registers for compare
+                    pop de
+                    pop hl
+
+                    ; hl pointer to current location on cli 
+                    ; set de to the start of the second
+                    ; filename string
+                    ld de,FILE_NAME1
+                    call CLI_GETSTRARG
+
+                    ; we may continue to parse the line
+                    ; maybe we need to pass an numeric argument
+                    ; jp LINE_PARSE_END
+
+LINE_PARSE3:
+
+                    ; the next argument is an memory address in hex
                     ; hl pointer to current location on cli 
                     ; set de to the start of tmp string
                     ld de,LINETMP
@@ -209,7 +338,7 @@ LINE_PARSE:
                     ld (de), a                   
                     ;
                     pop hl
-                    
+
                     ; hl pointer to current location on cli 
                     ; set de to the start of tmp string
                     ld de,LINETMP
@@ -461,6 +590,7 @@ STARTDFN_OK2:
                     ;
                     push bc
                     push hl
+                    ld   hl,FILE_NAME
                     call SENDFNAME   
                     pop  hl
                     pop  bc
@@ -772,6 +902,7 @@ STARTWFN_OK2:
                     ;
                     push    bc
                     push    hl
+                    ld   hl,FILE_NAME
                     call    SENDFNAME   
                     pop     hl
                     pop     bc
@@ -1062,6 +1193,7 @@ STARTRFN_OK2:
                     ;
                     push bc
                     push hl
+                    ld   hl,FILE_NAME
                     call SENDFNAME   
                     pop  hl
                     pop  bc
@@ -1226,6 +1358,188 @@ ENDRFD_OK:
 ;
 ;--------------------------------------------------------
 STARTRNFN:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTRNFN_OK1 
+; just info
+STARTRNFN_FAIL1:
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret
+
+STARTRNFN_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+
+                    ; start rename file
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDREN   
+                    out   (SDCWC),a
+                    
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ;ld   de,STR_CHK_NAME
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 32 exit
+                    cp   SDCSRENFN1
+                    jr   z,STARTRNFN_OK2
+
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return                    
+                    ret                     
+                    
+STARTRNFN_OK2:
+                    ;
+                    ; ready to send the
+                    ; source file name
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ;
+                    ; send the source file name
+                    ;
+                    push bc
+                    push hl
+                    ld   hl,FILE_NAME
+                    call SENDFNAME   
+                    pop  hl
+                    pop  bc
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 10
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is rn file destination state ?
+                    cp   SDCSRENFN2
+                    jr   z, STARTRNFN_OK3
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret
+
+STARTRNFN_OK3:
+                    ; ready to send the
+                    ; destination file name
+
+                    push bc
+                    push hl
+                    ld   hl,FILE_NAME1
+                    call SENDFNAME   
+                    pop  hl
+                    pop  bc
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 20
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is rn file destination state ?
+                    cp   SDCSIDL
+                    jr   z, STARTRNFN_OK
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; return
+                    ret
+
+STARTRNFN_OK:                    
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_RENOK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
                         ret
 ;--------------------------------------------------------
 ;
@@ -1256,6 +1570,13 @@ STARTMKDN:
 STARTRMDN:
                         ret
 ;--------------------------------------------------------
+;
+; Check if file exists
+;
+;--------------------------------------------------------
+STARTEXFN:
+                        ret
+;--------------------------------------------------------
 ; 
 ; send file name or directory name
 ;
@@ -1267,7 +1588,9 @@ STARTRMDN:
 
 SENDFNAME:      
                     ; point hl to start of string
-                    ld   hl,FILE_NAME   
+                    ; caller must pass the 
+                    ; string address in hl
+                    ;ld   hl,FILE_NAME   
 SFNLOOPCHAR:      
                     ; load a register with the contents of
                     ; address pointed by hl register
@@ -1308,6 +1631,10 @@ SFNLOOPCHAR:
 ;--------------------------------------------
 
 STRCMP:
+            ; input: hl address string1
+            ;        de address string2
+            ; return: z if equal
+            ; afects: a, b
             LD      a,(hl) 
             CP      $0 
             RET     z 
@@ -1416,12 +1743,12 @@ OUTCHAR:
                     ; print char on
                     ; register A
                     push    bc
-                    ;push    de
+                    push    de
                     push    hl
                     ld      c,$02   
                     rst     $30   
                     pop     hl
-                    ;pop     de
+                    pop     de
                     pop     bc
                     ret
 
@@ -1471,12 +1798,23 @@ STR_LOADOK:         DB      "File loaded\n\r",0
 STR_SAVEOK:         DB      "File saved\n\r",0
 STR_DIROK:          DB      "List end!\n\r",0
 STR_REMOK:          DB      "File removed\n\r",0
+STR_RENOK:          DB      "File renamed\n\r",0
+STR_COPYOK:          DB      "File copied\n\r",0
+STR_EXISTOK:          DB      "File exist\n\r",0
+STR_MKDIROK:          DB      "Directory created\n\r",0
+STR_RMDIROK:          DB      "Directory removed\n\r",0
+STR_CHDIROK:          DB      "Directory changed\n\r",0
 
 CMD_LOAD:            DB      "LOAD",0
 CMD_SAVE:            DB      "SAVE",0
 CMD_DEL:             DB      "DEL",0
 CMD_LIST:            DB      "LIST",0
-
+CMD_REN:             DB      "REN",0
+CMD_COPY:            DB      "COPY",0
+CMD_EXIST:            DB      "EXIST",0
+CMD_MKDIR:            DB      "MKDIR",0
+CMD_RMDIR:            DB      "RMDIR",0
+CMD_CD:               DB      "CD",0
 
 ;                    ORG    $83E0
                     ORG    $FAE0
@@ -1486,6 +1824,6 @@ FILE_START:         DS $02 ; 2 bytes
 FILE_LEN:           DS $02 ; 2 bytes
 FILE_CMD:           DS $10 ; 16 bytes
 FILE_NAME:          DS $21 ; 33 bytes
-FILE_NAME2:         DS $21 ; 33 bytes
+FILE_NAME1:         DS $21 ; 33 bytes
 LINETMP:            DS $41 ; 65 bytes
 LINEBUF:            DS $81 ; 129 bytes
