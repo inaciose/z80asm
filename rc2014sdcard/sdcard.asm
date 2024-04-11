@@ -15,10 +15,10 @@
 ;          equ for sdcard commands
 ; v1.03  - sdcard firmware status code changed
 ;          stm32 firmware ztgsdcard2 v1.01
-; v1.04a - rename
-; v1.04b - copy, strange behavior on list after one copy. 
+; v1.04a - add rename
+; v1.04b - add copy, strange behavior on list after one copy. 
 ;          stm32 crash on list. need to del (on cli) the new copied file
-;
+; v1.04c - add mkdir & rmdir. stm32 still crash on list
 
                     ORG   $8000   
 ;                    ORG   $2000
@@ -43,7 +43,7 @@ SDCSCPYFN1:         EQU   0x40 ; copy, send source
 SDCSCPYFN2:         EQU   0x48 ; copy, send dest
 SDCSEXISFN:         EQU   0x80 ; exist file?, send name 
 SDCSMKDFN:          EQU   0x50 ; mkdir, send name
-SDCSRNDFN:          EQU   0x58 ; rmdir, send name
+SDCSRMDFN:          EQU   0x58 ; rmdir, send name
 SDCSCHDFN:          EQU   0x78 ; chdir, send name
 
                     ; sdcard io commands
@@ -713,7 +713,7 @@ STARTLSTF_OK1:
                     ; wait many ms before any
                     ; in or out to SD card
                     push hl
-                    ld  de, 100
+                    ld  de, 1000
                     ld  c, $0a
                     rst $30
                     pop hl
@@ -1744,14 +1744,329 @@ STARTCDDN:
 ;
 ;--------------------------------------------------------
 STARTMKDN:
-                        ret
+                    ;ld   de,STR_CMD_DEL
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTMKDN_OK1 
+; just info
+STARTMKDN_FAIL1:
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret
+
+STARTMKDN_OK1:
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+
+                    ; start mkdir
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDMKDIR   
+                    out   (SDCWC),a
+                    
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ;ld   de,STR_CHK_NAME
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 32 exit
+                    cp   SDCSMKDFN
+                    jr   z,STARTMKDN_OK2
+
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return                    
+                    ret                     
+                    
+STARTMKDN_OK2:
+                    ;
+                    ; ready to send the file name
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ;
+                    ; send the file name
+                    ;
+                    push bc
+                    push hl
+                    ld   hl,FILE_NAME
+                    call SENDFNAME   
+                    pop  hl
+                    pop  bc
+
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 10
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is rfile state ?
+                    cp   SDCSIDL
+                    jr   z, STARTMKDN_OK
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; return
+                    ret
+                    
+STARTMKDN_OK:                    
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_MKDIROK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+
+                    ret
+
 ;--------------------------------------------------------
 ;
 ; Remove directory on SD (mkdir)
 ;
 ;--------------------------------------------------------
 STARTRMDN:
-                        ret
+                    ;ld   de,STR_CMD_DEL
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTRMDN_OK1 
+; just info
+STARTRMDN_FAIL1:
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret
+
+STARTRMDN_OK1:
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+
+                    ; start mkdir
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDRMDIR   
+                    out   (SDCWC),a
+                    
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ;ld   de,STR_CHK_NAME
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 32 exit
+                    cp   SDCSRMDFN
+                    jr   z,STARTRMDN_OK2
+
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return                    
+                    ret                     
+                    
+STARTRMDN_OK2:
+                    ;
+                    ; ready to send the file name
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ;
+                    ; send the file name
+                    ;
+                    push bc
+                    push hl
+                    ld   hl,FILE_NAME
+                    call SENDFNAME   
+                    pop  hl
+                    pop  bc
+
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 10
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is rfile state ?
+                    cp   SDCSIDL
+                    jr   z, STARTRMDN_OK
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; return
+                    ret
+                    
+STARTRMDN_OK:                    
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_RMDIROK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+
+                    ret
 ;--------------------------------------------------------
 ;
 ; Check if file exists
