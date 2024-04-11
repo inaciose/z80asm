@@ -22,7 +22,8 @@
 ; v1.04d - add a litle more time to wait for list generation
 ;          stm32 firmware v1.04 dont crash on list
 ; v1.04e - add cd (change directory)
-;
+; v1.04f - add cwd (get current working directory full path name)
+;        - add loop for the cli (require enter "exit" to return to SCM)
 ;
                     ORG   $8000   
 ;                    ORG   $2000
@@ -49,6 +50,7 @@ SDCSEXISFN:         EQU   0x80 ; exist file?, send name
 SDCSMKDFN:          EQU   0x50 ; mkdir, send name
 SDCSRMDFN:          EQU   0x58 ; rmdir, send name
 SDCSCHDFN:          EQU   0x78 ; chdir, send name
+SDCSCWD:            EQU   0x98 ; cwd, read data (full path name)
 
                     ; sdcard io commands
 SDCMDRESET:          EQU   0x0f
@@ -64,6 +66,7 @@ SDCMDEXIST:          EQU   0x12
 SDCMDMKDIR:          EQU   0x13
 SDCMDRMDIR:          EQU   0x14
 SDCMDCD:             EQU   0x15
+SDCMDCWD:            EQU   0x16
 
 
 ;
@@ -80,8 +83,10 @@ APILIST:            jp STARTLSTF
 APIREN:             jp STARTRNFN
 APICOPY:            jp STARTCPFN
 APICHDIR:           jp STARTCDDN
+APICWD:             jp STARTCWDN
 APIMKDIR:           jp STARTMKDN
 APIRMDIR:           jp STARTRMDN
+APIEXIST:           jp STARTEXFN
 
 ; just info
 MAIN:        
@@ -172,7 +177,7 @@ MAIN_CHK2:
                     ; dispatch
                     call STARTRFN
                     
-                    jr MAIN_END
+                    jp MAIN_END
 
 MAIN_CHK3:
                     ld hl, CMD_REN
@@ -247,6 +252,30 @@ MAIN_CHK8:
                     jr MAIN_END
 
 MAIN_CHK9:
+                    ld hl, CMD_CWD
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK10
+                    
+                    ; dispatch
+                    call STARTCWDN
+                    
+                    jr MAIN_END
+
+
+MAIN_CHK10:
+                    ld hl, CMD_EXIT
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK11
+                    
+                    ; dispatch
+                    jr MAIN_RETURN
+
+
+MAIN_CHK11:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -257,6 +286,9 @@ MAIN_CHK9:
                     call STARTWFN
 
 MAIN_END:
+                    jp MAIN
+
+MAIN_RETURN:
                     ret
 
 ;--------------------------------------------------------
@@ -1900,6 +1932,161 @@ STARTCDDN_OK:
 
 
                         ret
+
+;--------------------------------------------------------
+;
+; Get current working directory full path name (cwd)
+;
+;--------------------------------------------------------
+STARTCWDN:
+                    ;ld   de,STR_CMD_LIST
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTCWDN_OK1 
+; just info
+STARTCWDN_FAIL1:
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret
+
+STARTCWDN_OK1:
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start directory list
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDCWD   
+                    out   (SDCWC),a
+                    
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ;ld   de,STR_CHK_NAME
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait many ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 200
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+CWDNLOOP:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; check if we have
+                    ; any byte available
+
+                    ; get status
+                    in   a,(SDCRS)
+                    
+                    ; display status
+                    ;call OUTCHAR
+                    ;push af
+                    ; output nl & cr
+                    ;ld a, '\n'
+                    ;call OUTCHAR
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+                    ;pop af
+                    
+                    ; return if its not in dir list state
+                    cp   SDCSCWD                     
+  
+                    ; directory listed
+                    jr  nz, CWDNEND_OK
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    ;push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    ;pop bc 
+                    
+                    ; get data
+                    in   a,(SDCRD)
+                    
+                    ; display char
+                    call OUTCHAR                    
+                    
+                    jr CWDNLOOP
+                      
+                    
+CWDNEND_OK:
+                    ;
+                    ; directory was listed
+                    ;
+                    ; output nl & cr
+                    ld a, '\n'
+                    call OUTCHAR
+                    ld a, '\r'
+                    call OUTCHAR  
+
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_CWDOK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; return
+                    ret
+
+
 ;--------------------------------------------------------
 ;
 ; Make directory on SD (mkdir)
@@ -2464,6 +2651,8 @@ STR_EXISTOK:          DB      "File exist\n\r",0
 STR_MKDIROK:          DB      "Directory created\n\r",0
 STR_RMDIROK:          DB      "Directory removed\n\r",0
 STR_CHDIROK:          DB      "Directory changed\n\r",0
+STR_CWDOK:            DB      "Current directory\n\r",0
+STR_RST:              DB      "Interface reset\n\r",0
 
 CMD_LOAD:            DB      "LOAD",0
 CMD_SAVE:            DB      "SAVE",0
@@ -2475,6 +2664,9 @@ CMD_EXIST:            DB      "EXIST",0
 CMD_MKDIR:            DB      "MKDIR",0
 CMD_RMDIR:            DB      "RMDIR",0
 CMD_CD:               DB      "CD",0
+CMD_CWD:              DB      "CWD",0
+CMD_EXIT:             DB      "EXIT",0
+CMD_RESET:            DB      "RESET",0
 
 ;                    ORG    $83E0
                     ORG    $FAE0
