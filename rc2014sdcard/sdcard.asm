@@ -25,6 +25,7 @@
 ; v1.04f - add cwd (get current working directory full path name)
 ;        - add loop for the cli (require enter "exit" to return to SCM)
 ; v1.04g - add reset (reset the sd card interface, same as "o 40 f")
+; v1.04h - add exist (check if file exists) (0 = no exist, 1 = file, 2 = dir)
 ;
                     ORG   $8000   
 ;                    ORG   $2000
@@ -48,6 +49,7 @@ SDCSRENFN2:         EQU   0x38 ; rename, send dest
 SDCSCPYFN1:         EQU   0x40 ; copy, send source 
 SDCSCPYFN2:         EQU   0x48 ; copy, send dest
 SDCSEXISFN:         EQU   0x80 ; exist file?, send name 
+SDCSEXIST:          EQU   0x82 ; exist file?, read data 
 SDCSMKDFN:          EQU   0x50 ; mkdir, send name
 SDCSRMDFN:          EQU   0x58 ; rmdir, send name
 SDCSCHDFN:          EQU   0x78 ; chdir, send name
@@ -203,7 +205,7 @@ MAIN_CHK4:
                     ; dispatch
                     call STARTCPFN
                     
-                    jr MAIN_END
+                    jp MAIN_END
 
 MAIN_CHK5:
                     ld hl, CMD_EXIST
@@ -215,7 +217,7 @@ MAIN_CHK5:
                     ; dispatch
                     call STARTEXFN
                     
-                    jr MAIN_END
+                    jp MAIN_END
 
 MAIN_CHK6:
                     ld hl, CMD_MKDIR
@@ -277,16 +279,32 @@ MAIN_CHK10:
                     jr MAIN_RETURN
 
 MAIN_CHK11:
-                    ld hl, CMD_RESET
+                    ld hl, CMD_EXIST
                     ld de, FILE_CMD
                     
                     call STRCMP
                     jr nz, MAIN_CHK12
                     
                     ; dispatch
-                    call STARTRESET
+                    call STARTEXFN
+                
+                    jr MAIN_END
+
 
 MAIN_CHK12:
+                    ld hl, CMD_RESET
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK13
+                    
+                    ; dispatch
+                    call STARTRESET
+                                        
+                    jr MAIN_END
+
+
+MAIN_CHK13:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -2492,7 +2510,216 @@ STARTRESET_OK:
 ;
 ;--------------------------------------------------------
 STARTEXFN:
+                    ;ld   de,STR_CMD_DEL
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTEXFN_OK1 
+; just info
+STARTEXFN_FAIL1:
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret
+
+STARTEXFN_OK1:
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+
+                    ; start mkdir
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDEXIST   
+                    out   (SDCWC),a
+                    
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ;ld   de,STR_CHK_NAME
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 32 exit
+                    cp   SDCSEXISFN
+                    jr   z,STARTEXFN_OK2
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return                    
+                    ret                     
+
+STARTEXFN_OK2:
+                    ;
+                    ; ready to send the file name
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ;
+                    ; send the file name
+                    ;
+                    push bc
+                    push hl
+                    ld   hl,FILE_NAME
+                    call SENDFNAME   
+                    pop  hl
+                    pop  bc
+
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 10
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is rfile state ?
+                    cp   SDCSEXIST
+                    jr   z, STARTEXFN_OK3
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; return
+                    ret
+
+STARTEXFN_OK3:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; get data
+                    in   a,(SDCRD)
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR 
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is rfile state ?
+                    cp   SDCSIDL
+                    jr   z, STARTEXFN_OK
+
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; return
+                    ret
+
+STARTEXFN_OK:                    
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_EXISTOK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
                         ret
+
 ;--------------------------------------------------------
 ; 
 ; send file name or directory name
@@ -2651,6 +2878,34 @@ HEX2NUM1:           SUB     "0"
                     RET      
 
 ;--------------------------------------------
+
+NUM2HEX:
+                    ; input on a
+                    ; result on de
+                    push bc
+                    ld c, a   ; a = number to convert
+                    call NUM2HEX1
+                    ld d, a
+                    ld a, c
+                    call NUM2HEX2
+                    ld e, a
+                    pop bc
+                    ret  ; return with hex number in de
+
+NUM2HEX1:
+                    rra
+                    rra
+                    rra
+                    rra
+NUM2HEX2:        
+                    or 0xF0
+                    daa
+                    add a, 0xA0
+                    adc a, 0x40 ; Ascii hex at this point (0 to F)   
+                    ret     
+
+;--------------------------------------------
+
 
 OUTCHAR:      
                     ; print char on
