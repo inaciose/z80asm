@@ -26,6 +26,7 @@
 ;        - add loop for the cli (require enter "exit" to return to SCM)
 ; v1.04g - add reset (reset the sd card interface, same as "o 40 f")
 ; v1.04h - add exist (check if file exists) (0 = no exist, 1 = file, 2 = dir)
+; v1.04i - add sdstatus (get status code of the sd card interface)
 ;
                     ORG   $8000   
 ;                    ORG   $2000
@@ -90,7 +91,7 @@ APICWD:             jp STARTCWDN
 APIMKDIR:           jp STARTMKDN
 APIRMDIR:           jp STARTRMDN
 APIEXIST:           jp STARTEXFN
-APIRESET:           jp STARTRESET
+;APIRESET:           jp STARTRESET
 
 ; just info
 MAIN:        
@@ -290,7 +291,6 @@ MAIN_CHK11:
                 
                     jr MAIN_END
 
-
 MAIN_CHK12:
                     ld hl, CMD_RESET
                     ld de, FILE_CMD
@@ -303,8 +303,20 @@ MAIN_CHK12:
                                         
                     jr MAIN_END
 
-
 MAIN_CHK13:
+                    ld hl, CMD_SDIFS
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK14
+                    
+                    ; dispatch
+                    call STARTSDIFS
+                                        
+                    jr MAIN_END
+
+
+MAIN_CHK14:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -2506,6 +2518,48 @@ STARTRESET_OK:
 
 ;--------------------------------------------------------
 ;
+; Getet the SD card interface status (sdifs)
+;
+;--------------------------------------------------------
+STARTSDIFS: 
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR          
+               
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_SDIFSOK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ret
+
+;--------------------------------------------------------
+;
 ; Check if file exists
 ;
 ;--------------------------------------------------------
@@ -2586,6 +2640,7 @@ STARTEXFN_OK1:
                     ld  c, $0a
                     rst $30
                     pop hl
+
                     ; get status
                     in   a,(SDCRS)   
                     ; if status != 32 exit
@@ -2973,7 +3028,8 @@ STR_MKDIROK:          DB      "Directory created\n\r",0
 STR_RMDIROK:          DB      "Directory removed\n\r",0
 STR_CHDIROK:          DB      "Directory changed\n\r",0
 STR_CWDOK:            DB      "Current directory\n\r",0
-STR_RESETOK:          DB      "SD card Interface reset\n\r",0
+STR_RESETOK:          DB      "SD card iff reset\n\r",0
+STR_SDIFSOK:          DB      "SD card iff status\n\r",0
 
 CMD_LOAD:            DB      "LOAD",0
 CMD_SAVE:            DB      "SAVE",0
@@ -2988,6 +3044,7 @@ CMD_CD:               DB      "CD",0
 CMD_CWD:              DB      "CWD",0
 CMD_EXIT:             DB      "EXIT",0
 CMD_RESET:            DB      "RESET",0
+CMD_SDIFS:            DB      "SDIFS",0
 
 ;                    ORG    $83E0
                     ORG    $FAE0
