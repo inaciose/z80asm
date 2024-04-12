@@ -2968,7 +2968,7 @@ STR_DIROK:          DB      "List end!\n\r",0
 STR_REMOK:          DB      "File removed\n\r",0
 STR_RENOK:          DB      "File renamed\n\r",0
 STR_COPYOK:          DB      "File copied\n\r",0
-STR_EXISTOK:          DB      "File exist\n\r",0
+STR_EXISTOK:          DB      "File verified\n\r",0
 STR_MKDIROK:          DB      "Directory created\n\r",0
 STR_RMDIROK:          DB      "Directory removed\n\r",0
 STR_CHDIROK:          DB      "Directory changed\n\r",0
