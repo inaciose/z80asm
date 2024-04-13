@@ -27,6 +27,9 @@
 ; v1.04g - add reset (reset the sd card interface, same as "o 40 f")
 ; v1.04h - add exist (check if file exists) (0 = no exist, 1 = file, 2 = dir)
 ; v1.04i - add sdstatus (get status code of the sd card interface)
+; v1.04j - change list (add directory as argument)
+;        - fix error when just return is pressed
+;
 ;
                     ORG   $8000   
 ;                    ORG   $2000
@@ -43,7 +46,8 @@ SDCSWFN:            EQU   0x10 ; write file, send name
 SDCSWFD:            EQU   0x12 ; write file, send data
 SDCSRFN:            EQU   0x08 ; read file, send name 
 SDCSRFD:            EQU   0x0a ; read file, read data
-SDCSDIR:            EQU   0x20 ; read data (dir list data)
+SDCSDIRFN:          EQU   0x20 ; list send name ('\0' is current dir)
+SDCSDIR:            EQU   0x22 ; read list data
 SDCSDFN:            EQU   0x28 ; delete file, send name
 SDCSRENFN1:         EQU   0x30 ; rename, send source 
 SDCSRENFN2:         EQU   0x38 ; rename, send dest
@@ -106,7 +110,14 @@ MAIN:
                     ld   de, STR_CMD
                     ld   C,$06
                     rst   $30 
-                    
+
+                    ; init LINEBUF to zero
+                    ld hl,LINEBUF
+                    ld de,LINEBUF+1
+                    ld bc, 0x0080
+                    ld (hl), 0x00
+                    ldir
+
                     ; get cmd string from user
                     ; call api: get input
                     ld de, LINEBUF
@@ -133,7 +144,7 @@ MAIN:
                     ;ld   C,$06
                     ; call api
                     ;rst   $30
-                    
+
                     ; output nl & cr
                     ld a, '\n'
                     call OUTCHAR
@@ -149,15 +160,18 @@ MAIN:
                     ; hl have the command
                     ; de have the input to be tested
                     
+
+                    ; dummy check to handle 
+                    ; return key only
+                    ; the '/0' on FILE_CMD
+                    ; match the compare
                     ld hl, CMD_DEL
                     ld de, FILE_CMD
                     
                     call STRCMP
                     jr nz, MAIN_CHK1
-                    
-                    ; dispatch
-                    call STARTDFN
 
+                    ; dispatch
                     jp MAIN_END
                     
 MAIN_CHK1:
@@ -167,6 +181,9 @@ MAIN_CHK1:
                     call STRCMP
                     jr nz, MAIN_CHK2
                     
+                    ld a, 'b'
+                    call OUTCHAR
+
                     ; dispatch
                     call STARTLSTF
                     
@@ -230,7 +247,7 @@ MAIN_CHK6:
                     ; dispatch
                     call STARTMKDN
                     
-                    jr MAIN_END
+                    jp MAIN_END
 
 MAIN_CHK7:
                     ld hl, CMD_RMDIR
@@ -315,8 +332,19 @@ MAIN_CHK13:
                                         
                     jr MAIN_END
 
-
 MAIN_CHK14:
+                    ld hl, CMD_DEL
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK15
+
+                    ; dispatch
+                    call STARTDFN
+
+                    jp MAIN_END
+
+MAIN_CHK15:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -787,14 +815,83 @@ STARTLSTF_OK1:
                     ; call api
                     ;rst   $30
 
-                    ; wait many ms before any
+                    ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
-                    ld  de, 200
+                    ld  de, 1
                     ld  c, $0a
                     rst $30
                     pop hl
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 32 exit
+                    cp   SDCSDIRFN
+                    jr   z,STARTLSTF_OK2
+
                     
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return                    
+                    ret                     
+
+STARTLSTF_OK2:
+                    ;
+                    ; ready to send the file name
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ;
+                    ; send the file name
+                    ;
+                    push bc
+                    push hl
+                    ld   hl,FILE_NAME
+                    call SENDFNAME   
+                    pop  hl
+                    pop  bc
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 100
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is list dir state ?
+                    cp   SDCSDIR
+                    jr   z, DIRLISTLOOP
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; return
+                    ret
+
+
 DIRLISTLOOP:
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -3031,6 +3128,7 @@ STR_CWDOK:            DB      "Current directory\n\r",0
 STR_RESETOK:          DB      "SD card iff reset\n\r",0
 STR_SDIFSOK:          DB      "SD card iff status\n\r",0
 
+CMD_RET:             DB      "RET",0 ; not real command, only handle return key only
 CMD_LOAD:            DB      "LOAD",0
 CMD_SAVE:            DB      "SAVE",0
 CMD_DEL:             DB      "DEL",0
