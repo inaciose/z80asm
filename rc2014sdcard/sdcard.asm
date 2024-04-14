@@ -30,6 +30,7 @@
 ; v1.04j - change list (add directory as argument)
 ;        - fix error when just return is pressed
 ; v1.05a - add fileopen & fileclose, fix bug on cmd del call
+; v1.05b - add fwrite (write byte in a open file giving his hdl (id)
 ;         
 ;
                     ORG   $8000   
@@ -65,7 +66,9 @@ SDCSFOFM:           EQU   0xa8 ;
 SDCSCFOGH:          EQU   0xb0 ;
 SDCSFOIDL:          EQU   0xb2 ;
 SDCSCFHDL:          EQU   0xb8 ;
-
+SDCSFWHDL:          EQU   0xc0 ;
+SDCSFWRITE:         EQU   0xc2 ;
+SDCSFWSTAT:         EQU   0xc4 ;
 
                     ; sdcard io commands
 SDCMDRESET:          EQU   0x0f
@@ -84,6 +87,7 @@ SDCMDCD:             EQU   0x15
 SDCMDCWD:            EQU   0x16
 SDCMDFOPEN:          EQU   0x20
 SDCMDFCLOSE:         EQU   0x21
+SDCMDFWRITEB:        EQU   0x22
 
 ;
 ;
@@ -105,7 +109,8 @@ APIRMDIR:           jp STARTRMDN
 APIEXIST:           jp STARTEXFN
 ;APIRESET:           jp STARTRESET
 APIFOPEN:           jp STARTFOFN
-APIFCLOSE:          jp STARTFCFN
+APIFCLOSE:          jp STARTFCFH
+APIFWRITEB:         jp STARTFWFH
 
 
 ; just info
@@ -326,7 +331,7 @@ MAIN_CHK12:
                     ; dispatch
                     call STARTRESET
                                         
-                    jr MAIN_END
+                    jp MAIN_END
 
 MAIN_CHK13:
                     ld hl, CMD_SDIFS
@@ -338,7 +343,7 @@ MAIN_CHK13:
                     ; dispatch
                     call STARTSDIFS
                                         
-                    jr MAIN_END
+                    jp MAIN_END
 
 MAIN_CHK14:
                     ld hl, CMD_DEL
@@ -358,20 +363,6 @@ MAIN_CHK15:
                     
                     call STRCMP
                     jr nz, MAIN_CHK16
-
-                    ; prepare dispatch
-                    ; copy the field FILE_START
-                    ; to the field FILE_OMODE
-                    ;push hl
-                    ;push de
-                    ;push bc
-                    ;ld hl,FILE_START
-                    ;ld de,FILE_OMODE
-                    ;ld bc, 0x0003
-                    ;ldir
-                    ;pop bc
-                    ;pop de
-                    ;pop hl
 
                     ; dispatch
                     call STARTFOFN
@@ -407,11 +398,44 @@ MAIN_CHK16:
                     pop hl
 
                     ; dispatch
-                    call STARTFCFN
+                    call STARTFCFH
 
                     jp MAIN_END
 
 MAIN_CHK17:
+                    ld hl, CMD_FWRITE
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK18
+
+                    ; prepare dispatch
+                    ; convert the FILE_NAME field
+                    ; to numeric bin at FILE_HDL
+                    push hl
+                    push de
+                    ;
+                    ld hl,FILE_NAME
+                    call CONVERTTOUPPER
+
+                    call CLI_HEX2TBIN1
+                    ld de, FILE_HDL
+                    ld (de), a
+                    ;
+                    call CLI_HEX2TBIN1
+                    ld de, FILE_HDL
+                    inc de
+                    ld (de), a                   
+                    ;
+                    pop de
+                    pop hl
+
+                    ; dispatch
+                    call STARTFWFH
+
+                    jp MAIN_END
+
+MAIN_CHK18:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -3255,7 +3279,7 @@ STARTFOFN_OK:
 ; File close on SD - fclose (int *ofhld)
 ;
 ;--------------------------------------------------------
-STARTFCFN:
+STARTFCFH:
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
@@ -3268,7 +3292,7 @@ STARTFCFN:
                     in   a,(SDCRS)   
                     ; exit with error message if a != 0
                     cp   SDCSIDL   
-                    jr   z,STARTFCFN_OK1 
+                    jr   z,STARTFCFH_OK1 
 
                     ; open file idle status is also acepted
                     ; get status
@@ -3278,7 +3302,7 @@ STARTFCFN:
                     ;jr   z,STARTFOFN_OK1
 
 ; just info
-STARTFCFN_FAIL1:
+STARTFCFH_FAIL1:
                     ;
                     ; display error message
                     ;
@@ -3292,7 +3316,7 @@ STARTFCFN_FAIL1:
                     ; return
                     ret
 
-STARTFCFN_OK1:
+STARTFCFH_OK1:
                     ;
                     ; sdcard status is ok
                     ;
@@ -3332,7 +3356,7 @@ STARTFCFN_OK1:
                     in   a,(SDCRS)   
                     ; if status != 160 exit
                     cp   SDCSCFHDL
-                    jr   z,STARTFCFN_OK2
+                    jr   z,STARTFCFH_OK2
 
                     ;
                     ; display error message
@@ -3347,7 +3371,7 @@ STARTFCFN_OK1:
                     ; return                    
                     ret 
 
-STARTFCFN_OK2:
+STARTFCFH_OK2:
                     ; ready to send the
                     ; hdl id of file to close
 
@@ -3400,7 +3424,7 @@ STARTFCFN_OK2:
                     in   a,(SDCRS)   
                     ; is the send mode state?
                     cp   SDCSIDL
-                    jr   z, STARTFCFN_OK3  
+                    jr   z, STARTFCFH_OK3  
 
                     ;
                     ; display error message
@@ -3415,7 +3439,310 @@ STARTFCFN_OK2:
                     ; return
                     ret                  
 
-STARTFCFN_OK3:
+STARTFCFH_OK3:
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_OK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ret
+;--------------------------------------------------------
+;
+; File write one byte - fwrite (int *ofhld, int b)
+;
+;--------------------------------------------------------
+STARTFWFH:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTFWFH_OK1 
+
+                    ; open file idle status is also acepted
+                    ; get status
+                    ;in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    ;cp   SDCSFOIDL   
+                    ;jr   z,STARTFOFN_OK1
+
+; just info
+STARTFWFH_FAIL1:
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret
+
+STARTFWFH_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start close file
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDFWRITEB   
+                    out   (SDCWC),a
+                    
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ;ld   de,STR_CHK_NAME
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 192 exit
+                    cp   SDCSFWHDL
+                    jr   z,STARTFWFH_OK2
+
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return                    
+                    ret 
+
+STARTFWFH_OK2:
+                    ; ready to send the
+                    ; hdl id of file to close
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_HDL
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                   
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is the send mode state?
+                    cp   SDCSFWRITE
+                    jr   z, STARTFWFH_OK3  
+
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret                  
+
+STARTFWFH_OK3:
+                    ; ready to send the
+                    ; byte (write byte)
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_NAME1
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                   
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is the send operation result state?
+                    cp   SDCSFWSTAT
+                    jr   z, STARTFWFH_OK4  
+
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret                  
+
+STARTFWFH_OK4:
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get data
+                    in   a,(SDCRD)   
+                    ; is the send mode state?
+
+                    ; register a have the file
+                    ; handler. just show it
+                    ; later may need to save in 
+                    ; a memory address for
+                    ; program api
+                    
+                    ;push de
+                    push af
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    pop af
+                    ;pop de
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is rn file destination state ?
+                    cp   SDCSIDL
+                    jr   z, STARTFWFH_OK
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; return
+                    ret
+
+
+STARTFWFH_OK:
                     ;
                     ; display end message
                     ;
@@ -3700,6 +4027,7 @@ CMD_RESET:            DB      "RESET",0
 CMD_SDIFS:            DB      "SDIFS",0
 CMD_FOPEN:            DB      "FOPEN",0
 CMD_FCLOSE:           DB      "FCLOSE",0
+CMD_FWRITE:           DB      "FWRITE",0
 
 ;                    ORG    $83E0
 ;                    ORG    $FAE0
@@ -3713,6 +4041,7 @@ FILE_NAME:          DS $21 ; 33 bytes
 FILE_NAME1:         DS $21 ; 33 bytes
 FILE_OMODE:         DS $04 ; 4 bytes
 FILE_HDL:           DS $02 ; 2 bytes
+;FILE_BUF:           DS $81 ; 129 bytes
 
 LINETMP:            DS $41 ; 65 bytes
 LINEBUF:            DS $81 ; 129 bytes
