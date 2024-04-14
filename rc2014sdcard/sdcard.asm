@@ -33,6 +33,8 @@
 ; v1.05b - add fwrite byte (write a byte in a open file giving his hdl (id)
 ; v1.05c - add read byte (read a byte in a open file giving his hdl (id)
 ; v1.05d - add fgetpos
+; v1.05e - add seekset
+
 ;         
 ;
                     ORG   $8000   
@@ -77,6 +79,9 @@ SDCSFRSTAT:         EQU   0xcc ;
 SDCSFGPHDL:         EQU   0xd0 ;
 SDCSFGPOS:          EQU   0xd2 ;
 
+SDCSFSSHDL:          EQU   0xd8 ;
+SDCSSEKSET:          EQU   0xda ;
+SDCSFSSSTAT:         EQU   0xdc ;
 
                     ; sdcard io commands
 SDCMDRESET:          EQU   0x0f
@@ -98,6 +103,7 @@ SDCMDFCLOSE:         EQU   0x21
 SDCMDFWRITE:         EQU   0x22
 SDCMDFREAD:          EQU   0x23
 SDCMDFGPOS:          EQU   0x24
+SDCMDFSEKSET:        EQU   0x25
 
 ;
 ;
@@ -123,6 +129,7 @@ APIFCLOSE:          jp STARTFCFH
 APIFWRITE:          jp STARTFWFH
 APIFREAD:           jp STARTFRFH
 APIFGPOS:           jp STARTFGPFH
+APIFSEEKSET:         jp STARTFSSFH
 
 
 ; just info
@@ -480,7 +487,6 @@ MAIN_CHK18:
 
                     jp MAIN_END
 
-
 MAIN_CHK19:
                     ld hl, CMD_FGETPOS
                     ld de, FILE_CMD
@@ -515,6 +521,39 @@ MAIN_CHK19:
                     jp MAIN_END
 
 MAIN_CHK20:
+                    ld hl, CMD_FSEEKSET
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK21
+
+                    ; prepare dispatch
+                    ; convert the FILE_NAME field
+                    ; to numeric bin at FILE_HDL
+                    push hl
+                    push de
+                    ;
+                    ld hl,FILE_NAME
+                    call CONVERTTOUPPER
+
+                    call CLI_HEX2TBIN1
+                    ld de, FILE_HDL
+                    ld (de), a
+                    ;
+                    call CLI_HEX2TBIN1
+                    ld de, FILE_HDL
+                    inc de
+                    ld (de), a                   
+                    ;
+                    pop de
+                    pop hl
+
+                    ; dispatch
+                    call STARTFSSFH
+
+                    jp MAIN_END
+
+MAIN_CHK21:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -3051,7 +3090,7 @@ STARTEXFN_OK:
                         ret
 ;--------------------------------------------------------
 ;
-; File open on SD, with name & mode - int ofhld = fopen (char *fn, int *mode)
+; File open on SD, with name & mode - int ofhld = fopen (char *fn, int32 *mode)
 ;
 ;--------------------------------------------------------
 STARTFOFN:
@@ -3248,9 +3287,6 @@ STARTFOFN_OK3:
                     ; send LB
                     inc  hl
                     ld   a, (hl)
-
-
-
 
                     out (SDCWD),a
                     pop  af
@@ -4319,6 +4355,385 @@ STARTFGPFH_OK:
 
                     ret
 
+;--------------------------------------------------------
+;
+; File possition set, - seekset (int *ofhld, int32 p)
+;
+;--------------------------------------------------------
+STARTFSSFH:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTFSSFH_OK1 
+
+                    ; open file idle status is also acepted
+                    ; get status
+                    ;in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    ;cp   SDCSFOIDL   
+                    ;jr   z,STARTFOFN_OK1
+
+; just info
+STARTFSSFH_FAIL1:
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret
+
+STARTFSSFH_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start close file
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDFSEKSET   
+                    out   (SDCWC),a
+                    
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ;ld   de,STR_CHK_NAME
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 216 exit
+                    cp   SDCSFSSHDL
+                    jr   z,STARTFSSFH_OK2
+
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return                    
+                    ret 
+
+STARTFSSFH_OK2:
+                    ; ready to send the
+                    ; hdl id of file to close
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_HDL
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                   
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is the send mode state?
+                    cp   SDCSSEKSET
+                    jr   z, STARTFSSFH_OK3  
+
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret                  
+
+STARTFSSFH_OK3:
+                    ; ready to send the four bytes (32bits)
+                    ; to set position on file
+
+                    ; we use:
+                    ; - FILE_START 16bits
+                    ; - FILE_LEN 16bits
+
+                    ;
+                    ; first the FILE_START
+                    ;
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_START
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+
+                    out (SDCWD),a
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send LB
+                    inc  hl
+                    ld   a, (hl)
+
+                    out (SDCWD),a
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ;
+                    ; now the FILE_LEN
+                    ;
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_LEN
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+
+                    out (SDCWD),a
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send LB
+                    inc  hl
+                    ld   a, (hl)
+
+                    out (SDCWD),a
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 10
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                   
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is the send operation result state?
+                    cp   SDCSFSSSTAT
+                    jr   z, STARTFSSFH_OK4  
+
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; return
+                    ret                  
+
+STARTFSSFH_OK4:
+                    ; read operation result
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get data
+                    in   a,(SDCRD)   
+                    
+                    ;
+                    ; show command result
+                    ;
+                    ;push de
+                    push af
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    pop af
+                    ;pop de
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is rn file destination state ?
+                    cp   SDCSIDL
+                    jr   z, STARTFSSFH_OK
+                    
+                    ; display error message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    
+                    ; return
+                    ret
+
+STARTFSSFH_OK:
+                    ; display end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+
+                    ret
 
 ;--------------------------------------------------------
 ; 
@@ -4595,7 +5010,8 @@ CMD_FOPEN:            DB      "FOPEN",0
 CMD_FCLOSE:           DB      "FCLOSE",0
 CMD_FWRITE:           DB      "FWRITE",0
 CMD_FREAD:            DB      "FREAD",0
-CMD_FGETPOS:            DB    "FGETPOS",0
+CMD_FGETPOS:          DB      "FGETPOS",0
+CMD_FSEEKSET:         DB      "FSEEKSET",0
 
 ;                    ORG    $83E0
 ;                    ORG    $FAE0
