@@ -35,19 +35,20 @@
 ; v1.05d - add fgetpos
 ; v1.05e - add seekset
 ; v1.05f - add seekcur & seekend
+; v1.05g - add rewind
 ;
 ;         
 ;
                     ORG   $8000   
 ;                    ORG   $2000
 
-                    ; sdcard io addresses
+; sdcard io addresses
 SDCRS:              EQU   0x40   
 SDCRD:              EQU   0x41   
 SDCWC:              EQU   0x40   
 SDCWD:              EQU   0x41 
 
-                    ; sdcard io status
+; sdcard io status
 SDCSIDL:            EQU   0x00 ;  
 SDCSWFN:            EQU   0x10 ; write file, send name 
 SDCSWFD:            EQU   0x12 ; write file, send data
@@ -88,8 +89,9 @@ SDCSFSCSTAT:        EQU   0xe4 ;
 SDCSFSEHDL:         EQU   0xe8 ;
 SDCSSEKEND:         EQU   0xea ;
 SDCSFSESTAT:        EQU   0xec ;
+SDCSFRWDHDL:        EQU   0xee ;
 
-                    ; sdcard io commands
+; sdcard io commands start
 SDCMDRESET:          EQU   0x0f
 SDCMDLOAD:           EQU   0x0d
 SDCMDSAVE:           EQU   0x0c
@@ -112,6 +114,7 @@ SDCMDFGPOS:          EQU   0x24
 SDCMDFSEKSET:        EQU   0x25
 SDCMDFSEKCUR:        EQU   0x26
 SDCMDFSEKEND:        EQU   0x27
+SDCMDFREWIND:        EQU   0x28
 
 ;
 ;
@@ -140,6 +143,7 @@ APIFGPOS:           jp STARTFGPFH
 APIFSEEKSET:        jp STARTFSSFH
 APIFSEEKCUR:        jp STARTFSCFH
 APIFSEEKEND:        jp STARTFSEFH
+APIFREWIND:         jp STARTFRWFH
 
 
 ; just info
@@ -406,25 +410,9 @@ MAIN_CHK16:
                     jr nz, MAIN_CHK17
 
                     ; prepare dispatch
-                    ; convert the FILE_NAME field
-                    ; to numeric bin at FILE_HDL
-                    push hl
-                    push de
-                    ;
-                    ld hl,FILE_NAME
-                    call CONVERTTOUPPER
-
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    ld (de), a
-                    ;
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    inc de
-                    ld (de), a                   
-                    ;
-                    pop de
-                    pop hl
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
 
                     ; dispatch
                     call STARTFCFH
@@ -439,25 +427,9 @@ MAIN_CHK17:
                     jr nz, MAIN_CHK18
 
                     ; prepare dispatch
-                    ; convert the FILE_NAME field
-                    ; to numeric bin at FILE_HDL
-                    push hl
-                    push de
-                    ;
-                    ld hl,FILE_NAME
-                    call CONVERTTOUPPER
-
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    ld (de), a
-                    ;
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    inc de
-                    ld (de), a                   
-                    ;
-                    pop de
-                    pop hl
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
 
                     ; dispatch
                     call STARTFWFH
@@ -472,25 +444,9 @@ MAIN_CHK18:
                     jr nz, MAIN_CHK19
 
                     ; prepare dispatch
-                    ; convert the FILE_NAME field
-                    ; to numeric bin at FILE_HDL
-                    push hl
-                    push de
-                    ;
-                    ld hl,FILE_NAME
-                    call CONVERTTOUPPER
-
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    ld (de), a
-                    ;
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    inc de
-                    ld (de), a                   
-                    ;
-                    pop de
-                    pop hl
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
 
                     ; dispatch
                     call STARTFRFH
@@ -505,25 +461,9 @@ MAIN_CHK19:
                     jr nz, MAIN_CHK20
 
                     ; prepare dispatch
-                    ; convert the FILE_NAME field
-                    ; to numeric bin at FILE_HDL
-                    push hl
-                    push de
-                    ;
-                    ld hl,FILE_NAME
-                    call CONVERTTOUPPER
-
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    ld (de), a
-                    ;
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    inc de
-                    ld (de), a                   
-                    ;
-                    pop de
-                    pop hl
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
 
                     ; dispatch
                     call STARTFGPFH
@@ -538,25 +478,9 @@ MAIN_CHK20:
                     jr nz, MAIN_CHK21
 
                     ; prepare dispatch
-                    ; convert the FILE_NAME field
-                    ; to numeric bin at FILE_HDL
-                    push hl
-                    push de
-                    ;
-                    ld hl,FILE_NAME
-                    call CONVERTTOUPPER
-
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    ld (de), a
-                    ;
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    inc de
-                    ld (de), a                   
-                    ;
-                    pop de
-                    pop hl
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
 
                     ; dispatch
                     call STARTFSSFH
@@ -571,31 +495,14 @@ MAIN_CHK21:
                     jr nz, MAIN_CHK22
 
                     ; prepare dispatch
-                    ; convert the FILE_NAME field
-                    ; to numeric bin at FILE_HDL
-                    push hl
-                    push de
-                    ;
-                    ld hl,FILE_NAME
-                    call CONVERTTOUPPER
-
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    ld (de), a
-                    ;
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    inc de
-                    ld (de), a                   
-                    ;
-                    pop de
-                    pop hl
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
 
                     ; dispatch
                     call STARTFSCFH
 
                     jp MAIN_END
-
 
 MAIN_CHK22:
                     ld hl, CMD_FSEEKEND
@@ -605,25 +512,9 @@ MAIN_CHK22:
                     jr nz, MAIN_CHK23
 
                     ; prepare dispatch
-                    ; convert the FILE_NAME field
-                    ; to numeric bin at FILE_HDL
-                    push hl
-                    push de
-                    ;
-                    ld hl,FILE_NAME
-                    call CONVERTTOUPPER
-
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    ld (de), a
-                    ;
-                    call CLI_HEX2TBIN1
-                    ld de, FILE_HDL
-                    inc de
-                    ld (de), a                   
-                    ;
-                    pop de
-                    pop hl
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
 
                     ; dispatch
                     call STARTFSEFH
@@ -631,6 +522,23 @@ MAIN_CHK22:
                     jp MAIN_END
 
 MAIN_CHK23:
+                    ld hl, CMD_FREWIND
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK24
+
+                    ; prepare dispatch
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
+
+                    ; dispatch
+                    call STARTFRWFH
+
+                    jp MAIN_END
+
+MAIN_CHK24:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -644,6 +552,34 @@ MAIN_END:
                     jp MAIN
 
 MAIN_RETURN:
+                    ret
+
+;--------------------------------------------------------
+;
+; main helper - FILE_NAME to FILE_HLD
+;
+;--------------------------------------------------------
+FNAME2FHDL:
+                    ; convert the FILE_NAME field
+                    ; to numeric bin at FILE_HDL
+                    push hl
+                    push de
+                    ;
+                    ld hl,FILE_NAME
+                    call CONVERTTOUPPER
+
+                    call CLI_HEX2TBIN1
+                    ld de, FILE_HDL
+                    ld (de), a
+                    ;
+                    call CLI_HEX2TBIN1
+                    ld de, FILE_HDL
+                    inc de
+                    ld (de), a                   
+                    ;
+                    pop de
+                    pop hl
+
                     ret
 
 ;--------------------------------------------------------
@@ -5155,8 +5091,6 @@ STARTFSCFH_OK:
 
                     ret
 
-
-
 ;--------------------------------------------------------
 ;
 ; File position set - seekend (int *ofhld, int32 p)
@@ -5511,6 +5445,149 @@ STARTFSEFH_OK:
                     ret
 
 ;--------------------------------------------------------
+;
+; File position set - rewind (int *ofhld)
+;
+;--------------------------------------------------------
+STARTFRWFH:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTFRWFH_OK1 
+
+; just info
+STARTFRWFH_FAIL1:
+                    ; display error message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+
+                    ret
+
+STARTFRWFH_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start close file
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDFREWIND   
+                    out   (SDCWC),a
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 216 exit
+                    cp   SDCSFRWDHDL
+                    jr   z,STARTFRWFH_OK2
+
+                    ; display error message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+
+                    ; return                    
+                    ret 
+
+STARTFRWFH_OK2:
+                    ; ready to send the
+                    ; hdl id of file to close
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_HDL
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                   
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is the send mode state?
+                    cp   SDCSIDL
+                    jr   z, STARTFRWFH_OK 
+
+                    ; display error message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+
+                    ret                  
+
+STARTFRWFH_OK:
+                    ; display end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+
+                    ret
+
+;--------------------------------------------------------
 ; 
 ; send file name or directory name
 ;
@@ -5766,6 +5843,9 @@ STR_CWDOK:            DB      "Current directory\n\r",0
 STR_RESETOK:          DB      "SD card iff reset\n\r",0
 STR_SDIFSOK:          DB      "SD card iff status\n\r",0
 
+;
+; command list
+; 
 CMD_RET:             DB      "RET",0 ; not real command, only handle return key only
 CMD_LOAD:            DB      "LOAD",0
 CMD_SAVE:            DB      "SAVE",0
@@ -5789,8 +5869,12 @@ CMD_FGETPOS:          DB      "FGETPOS",0
 CMD_FSEEKSET:         DB      "FSEEKSET",0
 CMD_FSEEKCUR:         DB      "FSEEKCUR",0
 CMD_FSEEKEND:         DB      "FSEEKEND",0
-;CMD_FREWIND:          DB      "FREWIND",0
-;CMD_FPEEK:            DB      "FPEEK",0
+CMD_FREWIND:          DB      "FREWIND",0
+CMD_FPEEK:            DB      "FPEEK",0
+
+;
+; RAM zone - variables
+;
 
 ;                    ORG    $83E0
 ;                    ORG    $FAE0
