@@ -37,6 +37,7 @@
 ; v1.05f - add seekcur & seekend
 ; v1.05g - add rewind
 ; v1.05h - add peek
+; v1.05i - global change to status codes (only)
 ;         
 ;
                     ORG   $8000   
@@ -50,48 +51,47 @@ SDCWD:              EQU   0x41
 
 ; sdcard io status
 SDCSIDL:            EQU   0x00 ;  
-SDCSWFN:            EQU   0x10 ; write file, send name 
-SDCSWFD:            EQU   0x12 ; write file, send data
-SDCSRFN:            EQU   0x08 ; read file, send name 
-SDCSRFD:            EQU   0x0a ; read file, read data
-SDCSDIRFN:          EQU   0x20 ; list send name ('\0' is current dir)
-SDCSDIR:            EQU   0x22 ; read list data
-SDCSDFN:            EQU   0x28 ; delete file, send name
-SDCSRENFN1:         EQU   0x30 ; rename, send source 
-SDCSRENFN2:         EQU   0x38 ; rename, send dest
-SDCSCPYFN1:         EQU   0x40 ; copy, send source 
-SDCSCPYFN2:         EQU   0x48 ; copy, send dest
-SDCSEXISFN:         EQU   0x80 ; exist file?, send name 
-SDCSEXIST:          EQU   0x82 ; exist file?, read data 
-SDCSMKDFN:          EQU   0x50 ; mkdir, send name
-SDCSRMDFN:          EQU   0x58 ; rmdir, send name
-SDCSCHDFN:          EQU   0x78 ; chdir, send name
-SDCSCWD:            EQU   0x98 ; cwd, read data (full path name)
-SDCSFOFN:           EQU   0xa0 ;
-SDCSFOFM:           EQU   0xa8 ;
-SDCSCFOGH:          EQU   0xb0 ;
-SDCSFOIDL:          EQU   0xb2 ;
-SDCSCFHDL:          EQU   0xb8 ;
-SDCSFWHDL:          EQU   0xc0 ;
-SDCSFWRITE:         EQU   0xc2 ;
-SDCSFWSTAT:         EQU   0xc4 ;
-SDCSFRHDL:          EQU   0xc8 ;
-SDCSFREAD:          EQU   0xca ;
-SDCSFRSTAT:         EQU   0xcc ;
-SDCSFGPHDL:         EQU   0xd0 ;
-SDCSFGPOS:          EQU   0xd2 ;
-SDCSFSSHDL:         EQU   0xd8 ;
-SDCSSEKSET:         EQU   0xda ;
-SDCSFSSSTAT:        EQU   0xdc ;
-SDCSFSCHDL:         EQU   0xe0 ;
-SDCSSEKCUR:         EQU   0xe2 ;
-SDCSFSCSTAT:        EQU   0xe4 ;
-SDCSFSEHDL:         EQU   0xe8 ;
-SDCSSEKEND:         EQU   0xea ;
-SDCSFSESTAT:        EQU   0xec ;
-SDCSFRWDHDL:        EQU   0xee ;
-SDCSFPKHDL:         EQU   0xf0 ;
-SDCSFPEEK:          EQU   0xf2 ;
+SDCSWFN:            EQU   0x06 ; write file, send name 
+SDCSWFD:            EQU   0x08 ; write file, send data
+SDCSRFN:            EQU   0x02 ; read file, send name 
+SDCSRFD:            EQU   0x04 ; read file, read data
+SDCSDIRFN:          EQU   0x0a ; list send name ('\0' is current dir)
+SDCSDIR:            EQU   0x0c ; read list data
+SDCSDFN:            EQU   0x0e ; delete file, send name
+SDCSRENFN1:         EQU   0x10 ; rename, send source 
+SDCSRENFN2:         EQU   0x12 ; rename, send dest
+SDCSCPYFN1:         EQU   0x14 ; copy, send source 
+SDCSCPYFN2:         EQU   0x16 ; copy, send dest
+SDCSEXISFN:         EQU   0x18 ; exist file?, send name 
+SDCSEXIST:          EQU   0x1a ; exist file?, read data 
+SDCSMKDFN:          EQU   0x1c ; mkdir, send name
+SDCSRMDFN:          EQU   0x1e ; rmdir, send name
+SDCSCHDFN:          EQU   0x20 ; chdir, send name
+SDCSCWD:            EQU   0x22 ; cwd, read data (full path name)
+SDCSFOFN:           EQU   0x24 ; file open file name
+SDCSFOFM:           EQU   0x26 ; file open file mode
+SDCSCFOGH:          EQU   0x28 ; file open get handle
+SDCSCFHDL:          EQU   0x2a ; file close handle
+SDCSFWHDL:          EQU   0x2c ; file write handle
+SDCSFWRITE:         EQU   0x2e ; file write
+SDCSFWSTAT:         EQU   0x30 ; file write status
+SDCSFRHDL:          EQU   0x32 ; file read handle
+SDCSFREAD:          EQU   0x34 ; file read
+SDCSFRSTAT:         EQU   0x36 ; file read status
+SDCSFGPHDL:         EQU   0x38 ; file get position handle
+SDCSFGPOS:          EQU   0x3a ; file get position
+SDCSFSSHDL:         EQU   0x3c ; file seekset handle
+SDCSSEKSET:         EQU   0x3e ; file seekset
+SDCSFSSSTAT:        EQU   0x40 ; file seekset status
+SDCSFSCHDL:         EQU   0x42 ; file seekcur handle
+SDCSSEKCUR:         EQU   0x44 ; file seekcur
+SDCSFSCSTAT:        EQU   0x46 ; file seekcur statuts
+SDCSFSEHDL:         EQU   0x48 ; file seekend handle
+SDCSSEKEND:         EQU   0x4a ; file seekend
+SDCSFSESTAT:        EQU   0x4c ; file seekend status
+SDCSFRWDHDL:        EQU   0x4e ; file rewind handle
+SDCSFPKHDL:         EQU   0x50 ; file peek handle
+SDCSFPEEK:          EQU   0x52 ; file peek
 
 ; sdcard io commands start
 SDCMDRESET:          EQU   0x0f

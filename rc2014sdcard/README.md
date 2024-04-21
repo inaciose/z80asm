@@ -27,7 +27,7 @@ Z80 exploration as SCM app
 - load name hexaddr (load name HHHH)
 - save name hexaddr hexlen (save name HHHH HHHH)
 - del name
-- list
+- list [name]
 - ren names named
 - copy names named
 - exist name (reply: 0 no, 1 file, 2 directory)
