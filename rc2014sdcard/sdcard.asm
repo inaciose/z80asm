@@ -41,7 +41,10 @@
 ; v1.06a - rewrite in order to get beter separation from operations and cli
 ;        - adding CLI and API entry points to routines
 ;        - adding memory variables - ERROR_CODE
-;        - routine names relabeling - STARTRFN > FLOADFN
+;        - routine names relabeling:
+;        - STARTRFN > FLOADFN
+;        - STARTWFN > FSAVEFN
+; v1.06b - Initial idle state check as routine (added to FSAVE, FLOAD)
 ;         
 ;
                     ORG   $8000   
@@ -1252,42 +1255,13 @@ FSAVEAPI:
 ;--------------------------------------------------------
 ;--------------------------------------------------------                    
 FSAVEFN:
-                    ;
-                    ; reset ERROR_CODE
-                    ;
-                    ;push hl
-                    ld hl, ERROR_CODE
-                    ld (hl), 0x00
-                    ;pop hl
-
-                    ;
-                    ; start checking iff state
-                    ;                    
-                    ; wait 1 ms before any
-                    ; in or out to SD card
-                    push hl
-                    ld  de, 1
-                    ld  c, $0a
-                    rst $30
-                    pop hl
-                    
-                    ; get status
-                    in   a,(SDCRS)   
-                    ; exit with error message if a != 0
-                    cp   SDCSIDL   
+                    ; check idle status                    
+                    ld   a, 0x01
+                    call SDCIDLECHK
                     jr   z,FSAVEFN_OK1 
+
 ; just info
 FSAVEFN_FAIL1:
-                    ;
-                    ; set error code and
-                    ; return to caller
-                    ;
-                    ;push hl
-                    ld a, 0x01
-                    ld hl, ERROR_CODE
-                    ld (hl), a
-                    ;pop hl
-
                     ret
 
 FSAVEFN_OK1:
@@ -1535,42 +1509,12 @@ FLOADAPI:
 ;--------------------------------------------------------
 ;--------------------------------------------------------                    
 FLOADFN:
-                    ;
-                    ; reset ERROR_CODE
-                    ;
-                    ;push hl
-                    ld hl, ERROR_CODE
-                    ld (hl), 0x00
-                    ;pop hl
-
-                    ;
-                    ; start checking iff state
-                    ;
-                    ; wait 1 ms before any
-                    ; in or out to SD card
-                    ;push hl
-                    ld  de, 1
-                    ld  c, $0a
-                    rst $30
-                    ;pop hl
-                    
-                    ; get status
-                    in   a,(SDCRS)   
-                    ; exit with error message if a != 0
-                    cp   SDCSIDL   
+                    ; check idle status                    
+                    ld   a, 0x01
+                    call SDCIDLECHK
                     jr   z,FLOADFN_OK1 
 ; just info
-FLOADFN_FAIL1:
-                    ;
-                    ; set error code and
-                    ; return to caller
-                    ;
-                    ;push hl
-                    ld a, 0x01
-                    ld hl, ERROR_CODE
-                    ld (hl), a
-                    ;pop hl
-
+FLOADFN_FAIL:
                     ret
 
 FLOADFN_OK1:
@@ -1587,7 +1531,7 @@ FLOADFN_OK1:
 
                     ; start load file
                     ; load cmd code in a, see equs
-                    ld   a,SDCMDLOAD ; 0x0d   
+                    ld   a,SDCMDLOAD    
                     out   (SDCWC),a
 
                     ; wait 1 ms before any
@@ -5831,6 +5775,59 @@ SFNLOOPCHAR:
 
                     inc hl   
                     jr  SFNLOOPCHAR
+
+
+;--------------------------------------------------------
+; 
+; Initial Check for idle status
+;
+;--------------------------------------------------------
+; args: register A should have the error number
+; return: register A have zero (success)
+;         or error number
+SDCIDLECHK:
+                    ;
+                    ; reset ERROR_CODE
+                    ;
+                    ;push hl
+                    ld hl, ERROR_CODE
+                    ld (hl), 0x00
+                    ;pop hl
+
+                    ;
+                    ; start checking iff state
+                    ;
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    ;push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    ;pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,SDCIDLECHK_OK 
+; just info
+SDCIDLECHK_FAIL:
+                    ;
+                    ; set error code and
+                    ; return to caller
+                    ;
+                    ;push hl
+                    ;ld a, 0x01
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+
+SDCIDLECHK_OK:
+                    ld a, 0x00
+
+                    ret
 
 ;--------------------------------------------
 ; 
