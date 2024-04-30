@@ -38,6 +38,10 @@
 ; v1.05g - add rewind
 ; v1.05h - add peek
 ; v1.05i - global change to status codes (only)
+; v1.06a - rewrite in order to get beter separation from operations and cli
+;        - adding CLI and API entry points to routines
+;        - adding memory variables - ERROR_CODE
+;        - routine names relabeling - STARTRFN > FLOADFN
 ;         
 ;
                     ORG   $8000   
@@ -125,29 +129,29 @@ SDCMDFPEEK:          EQU   0x29
 ; address to calling routines
 ; api call jump table 
 ;
-CLIENTRY:           jp MAIN
-APISAVE:            jp STARTWFN
-APILOAD:            jp STARTRFN
-APIDEL:             jp STARTDFN
-APILIST:            jp STARTLSTF
-APIREN:             jp STARTRNFN
-APICOPY:            jp STARTCPFN
-APICHDIR:           jp STARTCDDN
-APICWD:             jp STARTCWDN
-APIMKDIR:           jp STARTMKDN
-APIRMDIR:           jp STARTRMDN
-APIEXIST:           jp STARTEXFN
+CLIENTRY:            jp MAIN
+APIFSAVE:            jp FSAVEAPI
+APIFLOAD:            jp FLOADAPI
+APIFDEL:             jp STARTDFN
+APILIST:             jp STARTLSTF
+APIFREN:             jp STARTRNFN
+APIFCOPY:            jp STARTCPFN
+APICHDIR:            jp STARTCDDN
+APICWD:              jp STARTCWDN
+APIMKDIR:            jp STARTMKDN
+APIRMDIR:            jp STARTRMDN
+APIEXIST:            jp STARTEXFN
 ;APIRESET:           jp STARTRESET
-APIFOPEN:           jp STARTFOFN
-APIFCLOSE:          jp STARTFCFH
-APIFWRITE:          jp STARTFWFH
-APIFREAD:           jp STARTFRFH
-APIFGPOS:           jp STARTFGPFH
-APIFSEEKSET:        jp STARTFSSFH
-APIFSEEKCUR:        jp STARTFSCFH
-APIFSEEKEND:        jp STARTFSEFH
-APIFREWIND:         jp STARTFRWFH
-APIFPEEK:           jp STARTFPKFH
+APIFOPEN:            jp STARTFOFN
+APIFCLOSE:           jp STARTFCFH
+APIFWRITE:           jp STARTFWFH
+APIFREAD:            jp STARTFRFH
+APIFGPOS:            jp STARTFGPFH
+APIFSEEKSET:         jp STARTFSSFH
+APIFSEEKCUR:         jp STARTFSCFH
+APIFSEEKEND:         jp STARTFSEFH
+APIFREWIND:          jp STARTFRWFH
+APIFPEEK:            jp STARTFPKFH
 
 ; just info
 MAIN:        
@@ -238,6 +242,7 @@ MAIN_CHK1:
                     
                     jp MAIN_END
 
+;call FLOADCLI
 MAIN_CHK2:
                     ld hl, CMD_LOAD
                     ld de, FILE_CMD
@@ -246,7 +251,7 @@ MAIN_CHK2:
                     jr nz, MAIN_CHK3
                     
                     ; dispatch
-                    call STARTRFN
+                    call FLOADCLI
                     
                     jp MAIN_END
 
@@ -557,7 +562,7 @@ MAIN_CHK24:
                     call STARTFPKFH
 
                     jp MAIN_END
-
+;
 MAIN_CHK25:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
@@ -566,7 +571,7 @@ MAIN_CHK25:
                     jr nz, MAIN_END
                     
                     ; dispatch
-                    call STARTWFN
+                    call FSAVECLI
 
 MAIN_END:
                     jp MAIN
@@ -1211,17 +1216,53 @@ ENDDIR_OK:
 ; Save file to SD
 ;
 ;--------------------------------------------------------
-STARTWFN:
+;--------------------------------------------------------
+FSAVECLI:
                     ;
-                    ; display operation
+                    ; entry point from cli
                     ;
-                    ; load string start address
-                    ;ld   de,STR_CHK_IDLE
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-                    
+                    call FSAVEFN
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, FSAVECLI_OK
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                 
+
+FSAVECLI_OK:
+                    ; display ok end message
+                    ; using scm api
+                    ld   de,STR_SAVEOK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+FSAVEAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+FSAVEFN:
+                    ;
+                    ; reset ERROR_CODE
+                    ;
+                    ;push hl
+                    ld hl, ERROR_CODE
+                    ld (hl), 0x00
+                    ;pop hl
+
+                    ;
+                    ; start checking iff state
+                    ;                    
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
@@ -1234,32 +1275,25 @@ STARTWFN:
                     in   a,(SDCRS)   
                     ; exit with error message if a != 0
                     cp   SDCSIDL   
-                    jr   z,STARTWFN_OK1 
+                    jr   z,FSAVEFN_OK1 
 ; just info
-STARTWFN_FAIL1:
+FSAVEFN_FAIL1:
                     ;
-                    ; display error message
+                    ; set error code and
+                    ; return to caller
                     ;
-                    ; load string start address
-                    ld   de,STR_SDSTATUS_BAD
-                    ; load api id
-                    ld   C,$06
-                    ; call api
-                    rst   $30
+                    ;push hl
+                    ld a, 0x01
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
 
-                    ; return
                     ret
 
-STARTWFN_OK1:
+FSAVEFN_OK1:
                     ;
-                    ; display ok message
-                    ;
-                    ;ld   de,STR_SDSTATUS_OK
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-                    
+                    ; iff status is ok to proceed
+                    ;                    
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
@@ -1273,16 +1307,6 @@ STARTWFN_OK1:
                     ld   a,SDCMDSAVE   
                     out   (SDCWC),a
                     
-                    ;
-                    ; display operation
-                    ;
-                    ; load string start address
-                    ;ld   de,STR_CHK_NAME
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-                    
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
@@ -1291,38 +1315,30 @@ STARTWFN_OK1:
                     rst $30
                     pop hl
 
-                    ; get status
-                    in   a,(SDCRS)   
-                    ; if status != 3 exit
-                    cp   SDCSWFN
-                    jr   z,STARTWFN_OK2
-                    
-                    ;
-                    ; display error message
-                    ;
-                    ; load string start address
-                    ld   de,STR_SDSTATUS_BAD
-                    ; load api id
-                    ld   C,$06
-                    ; call api
-                    rst   $30
 
-                    ; return                    
-                    ret                     
+                    ;
+                    ; check iff status
+                    ;
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSWFN
+                    jr   z,FSAVEFN_OK2
                     
-STARTWFN_OK2:
+                    ;
+                    ; set error code and
+                    ; return to caller
+                    ;
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                      
+                    
+FSAVEFN_OK2:
                     ;
                     ; ready to send the file name
-                    ;
-                    ; display ok message
-                    ;
-                    ;ld   de,STR_SDSTATUS_OK
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-                    
-                    ;
                     ; send the file name
                     ;
                     push    bc
@@ -1333,17 +1349,7 @@ STARTWFN_OK2:
                     pop     bc
                     
 ; just info
-STARTWFD:      
-                    ;
-                    ; display operation
-                    ;
-                    ; load string start address
-                    ;ld   de,STR_CHK_FILE
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-
+FSAVEWD:      
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
@@ -1356,32 +1362,27 @@ STARTWFD:
                     in   a,(SDCRS)   
                     ; return if its not wfile state
                     cp   SDCSWFD   
-                    jr   z, STARTWFD_OK
+                    jr   z, FSAVEWD_OK
                     
                     ;
-                    ; display error message
+                    ; set error code and
+                    ; return to caller
                     ;
-                    ; load string start address
-                    ld   de,STR_SDSTATUS_BAD
-                    ; load api id
-                    ld   C,$06
-                    ; call api
-                    rst   $30
-                    ; return
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
                     ret
 
-STARTWFD_OK:
+
+FSAVEWD_OK:
                     ;
-                    ; display ok message
+                    ; ready to save data on file
                     ;
-                    ;ld   de,STR_SDSTATUS_OK
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
                     
                     ; point hl to start of memory
-                    ;ld   hl,PRGADDR
                     ld hl,FILE_START
                     ld d, (hl)
                     inc hl
@@ -1390,8 +1391,6 @@ STARTWFD_OK:
                     ld h, d
                     ld l, e
 
-
-                    ;ld b,PRGLEN
                     push hl
                     ;
                     ld hl,FILE_LEN
@@ -1400,11 +1399,10 @@ STARTWFD_OK:
                     ld e, (hl)
                     ;
                     pop hl
-                    
-                    
+                                        
                     ld   c,SDCWD 
                     
-WFDLOOPADDR:      
+FSAVEWDLOOP:      
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push de
@@ -1423,16 +1421,15 @@ WFDLOOPADDR:
                     ; control if its over
                     dec de
                     
-                    ; check if bc is zero
+                    ; check if de is zero
                     ;push a
                     ld a, d
                     or e
                     ;pop a
                     
                     ; not zero
-                    jr   nz,WFDLOOPADDR 
-                    
-                    
+                    jr   nz,FSAVEWDLOOP 
+                                        
                     ; wait 1 ms before any
                     ; in or out to SD card
                     ;push de
@@ -1451,7 +1448,7 @@ WFDLOOPADDR:
                     out  (SDCWC),a   
 
 ; just info
-ENDWFD:
+FSAVEWDEND:
                     ; wait 1 ms before any
                     ; in or out to SD card
                     ;push de
@@ -1468,30 +1465,30 @@ ENDWFD:
                     in   a,(SDCRS)   
                     ; if ok its idle state
                     cp   SDCSIDL   
-                    jr   z,ENDWFD_OK                    
+                    jr   z,FSAVEWDEND_OK                    
 
                     ;
-                    ; display error message
+                    ; set error code and
+                    ; return to caller
                     ;
-                    ld   de,STR_ERROR
-                    ; load api id
-                    ld   C,$06
-                    ; call api
-                    rst   $30
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
 
-                    ; return
                     ret
 
-ENDWFD_OK:                    
+FSAVEWDEND_OK:                    
                     ; the file is loaded
                     ;
                     ; display end message
                     ;
-                    ld   de,STR_SAVEOK
+                    ;ld   de,STR_SAVEOK
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ; return
                     ret
@@ -1502,56 +1499,84 @@ ENDWFD_OK:
 ; Load file from SD
 ;
 ;--------------------------------------------------------
+;--------------------------------------------------------
+FLOADCLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call FLOADFN
 
-STARTRFN:
+                    ; check for operation result
+                    cp 0x00
+                    jr z, FLOADCLI_OK
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                 
+
+FLOADCLI_OK:
+                    ; display ok end message
+                    ; using scm api
+                    ld   de,STR_LOADOK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+FLOADAPI:
                     ;
-                    ; display operation
+                    ; entry point from api
                     ;
-                    ; load string start address
-                    ;ld   de,STR_CHK_IDLE
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-                    
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+FLOADFN:
+                    ;
+                    ; reset ERROR_CODE
+                    ;
+                    ;push hl
+                    ld hl, ERROR_CODE
+                    ld (hl), 0x00
+                    ;pop hl
+
+                    ;
+                    ; start checking iff state
+                    ;
                     ; wait 1 ms before any
                     ; in or out to SD card
-                    push hl
+                    ;push hl
                     ld  de, 1
                     ld  c, $0a
                     rst $30
-                    pop hl
+                    ;pop hl
                     
                     ; get status
                     in   a,(SDCRS)   
                     ; exit with error message if a != 0
                     cp   SDCSIDL   
-                    jr   z,STARTRFN_OK1 
+                    jr   z,FLOADFN_OK1 
 ; just info
-STARTRFN_FAIL1:
+FLOADFN_FAIL1:
                     ;
-                    ; display error message
+                    ; set error code and
+                    ; return to caller
                     ;
-                    ; load string start address
-                    ld   de,STR_SDSTATUS_BAD
-                    ; load api id
-                    ld   C,$06
-                    ; call api
-                    rst   $30
+                    ;push hl
+                    ld a, 0x01
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
 
-                    ; return
                     ret
 
-STARTRFN_OK1:
+FLOADFN_OK1:
                     ;
-                    ; display ok message
-                    ;
-                    ;ld   de,STR_SDSTATUS_OK
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-                    
+                    ; iff status is ok to proceed
+                    ;                    
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
@@ -1564,16 +1589,6 @@ STARTRFN_OK1:
                     ; load cmd code in a, see equs
                     ld   a,SDCMDLOAD ; 0x0d   
                     out   (SDCWC),a
-                    
-                    ;
-                    ; display operation
-                    ;
-                    ; load string start address
-                    ;ld   de,STR_CHK_NAME
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
 
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -1582,38 +1597,30 @@ STARTRFN_OK1:
                     ld  c, $0a
                     rst $30
                     pop hl
-                    ; get status
-                    in   a,(SDCRS)   
-                    ; if status != 3 exit
-                    cp   SDCSRFN
-                    jr   z,STARTRFN_OK2
-                    
-                    ;
-                    ; display error message
-                    ;
-                    ; load string start address
-                    ld   de,STR_SDSTATUS_BAD
-                    ; load api id
-                    ld   C,$06
-                    ; call api
-                    rst   $30
 
-                    ; return                    
-                    ret                     
+                    ;
+                    ; check iff status
+                    ;
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSRFN
+                    jr   z,FLOADFN_OK2
                     
-STARTRFN_OK2:
+                    ;
+                    ; set error code and
+                    ; return to caller
+                    ;
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                    
+                    
+FLOADFN_OK2:
                     ;
                     ; ready to send the file name
-                    ;
-                    ; display ok message
-                    ;
-                    ;ld   de,STR_SDSTATUS_OK
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-                    
-                    ;
                     ; send the file name
                     ;
                     push bc
@@ -1624,17 +1631,7 @@ STARTRFN_OK2:
                     pop  bc
                     
 ; just info
-STARTRFD:      
-                    ;
-                    ; display operation
-                    ;
-                    ; load string start address
-                    ;ld   de,STR_CHK_FILE
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-
+FLOADRD:
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
@@ -1647,31 +1644,24 @@ STARTRFD:
                     in   a,(SDCRS)   
                     ; is rfile state ?
                     cp   SDCSRFD
-                    jr   z, STARTRFD_OK
+                    jr   z, FLOADRD_OK
                     
                     ;
-                    ; display error message
+                    ; set error code and
+                    ; return to caller
                     ;
-                    ; load string start address
-                    ld   de,STR_SDSTATUS_BAD
-                    ; load api id
-                    ld   C,$06
-                    ; call api
-                    rst   $30
-                    
-                    ; return
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
                     ret
                     
-STARTRFD_OK:                    
+FLOADRD_OK:                    
+                    ;
                     ; ready to load the file data
                     ;
-                    ; display ok message
-                    ;
-                    ;ld   de,STR_SDSTATUS_OK
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
                     
                     ; point hl to start of memory
                     ld hl,FILE_START
@@ -1682,20 +1672,11 @@ STARTRFD_OK:
                     ld h, d
                     ld l, e
                     
+                    ; init bytes loaded counter
                     ld de, 0x0000
-RFDLOOPADDR:      
+FLOADRDLOOP:      
                     ; wait 1 ms before any
                     ; in or out to SD card
-                    ;;push bc
-                    ;push hl
-                    ;push de
-                    ;ld  de, 1
-                    ;ld  c, $0a
-                    ;rst $30
-                    ;pop de
-                    ;pop hl
-                    ;;pop bc
-
                     push de
                     ld de,0x00ff
                     call DELAYDE
@@ -1720,7 +1701,7 @@ RFDLOOPADDR:
                     ; return if its not rfile state
                     cp   SDCSRFD   
                     ; the file is loaded
-                    jr  nz, ENDRFD_OK   
+                    jr  nz, FLOADRDEND   
                     ;
 
                     ; wait 1 ms before any
@@ -1752,13 +1733,17 @@ RFDLOOPADDR:
                     ; c have the SDC address for WD
                     ld   c,SDCWD 
                     ini
-                    jr   nz,RFDLOOPADDR 
+                    jr   nz,FLOADRDLOOP 
 
-ENDRFD_OK:
+FLOADRDEND:
+                    ;
                     ; the file is loaded
+                    ; set the output variables 
                     ;
 
+                    ;
                     ; store num bytes loaded
+                    ;
                     push hl
                     ld hl, NUM_BYTES
                     ld (hl),d
@@ -1766,13 +1751,16 @@ ENDRFD_OK:
                     ld (hl),e
                     pop hl
 
+                    ; the ERROR_CODE should be zero
+                    ; no need to update it
+
                     ; display end message
                     ;
-                    ld   de,STR_LOADOK
+                    ;ld   de,STR_LOADOK
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ; return
                     ret
@@ -6091,9 +6079,14 @@ CMD_FPEEK:            DB      "FPEEK",0
 
 ;                    ORG    $83E0
 ;                    ORG    $FAE0
-                    ORG    $FA00                    
+;                    ORG    $FA00
+                    ORG    $F000                  
 RAMDATA:
+; output
+ERROR_CODE:         DS $01
 NUM_BYTES:          DS $02 ; 2 bytes
+
+; input
 FILE_START:         DS $02 ; 2 bytes
 FILE_LEN:           DS $02 ; 2 bytes
 FILE_CMD:           DS $10 ; 16 bytes
