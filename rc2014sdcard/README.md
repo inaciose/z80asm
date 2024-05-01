@@ -6,6 +6,8 @@ Requires the ZTGsdcard board with the apropriate firmware version.
 - https://github.com/inaciose/rc2014ss/tree/main/rcsdcard
 - https://github.com/inaciose/stm32f103_ztgsdcard2
 
+works with firmware: v1.05i - global change to status codes (only)  
+
 # Compilation
 compile origins (change on source)
 - for ROM 0x2000
