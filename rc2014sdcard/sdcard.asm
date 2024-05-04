@@ -48,6 +48,10 @@
 ; v1.06c - rewrite: FDEL, FREN, FCOPY, CD, CWD, MKDIR, RMDIR, RESET, SDIFS, FEXIST
 ; v1.06d - rewrite: FOPEN, FCLOSE, FWRITE, FREAD, FPEEK, FTELL, FSEEKSET, FSEEKCUR, FSEEKEND, FREWIND
 ; v1.06e - add fcat and ram vars change
+; v1.06f - firmare v1.06a - sync on fwrite byte (send result)
+;          without the sync the reading, after close the file,
+;          it is not ok. need to read twice. Like 'cat a.txt', after 'cat a.txt'
+;          change its only the last delay on FWRITEFH_OK4
 ;         
 ;
 ;                    ORG   $8000   
@@ -3746,10 +3750,12 @@ FWRITEFH_OK4:
                     ld hl, OUT_BYTE1
                     ld (hl), a
 
-                    ; wait 1 ms before any
+                    ; wait many ms before any
                     ; in or out to SD card
+                    ; with sync, we need 20
+                    ; TODO: should loop until
                     push hl
-                    ld   de, 1
+                    ld   de, 20
                     ld   c, $0a
                     rst  $30
                     pop  hl
