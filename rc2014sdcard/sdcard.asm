@@ -47,10 +47,11 @@
 ; v1.06b - Initial idle state check as routine (added to FSAVE, FLOAD)
 ; v1.06c - rewrite: FDEL, FREN, FCOPY, CD, CWD, MKDIR, RMDIR, RESET, SDIFS, FEXIST
 ; v1.06d - rewrite: FOPEN, FCLOSE, FWRITE, FREAD, FPEEK, FTELL, FSEEKSET, FSEEKCUR, FSEEKEND, FREWIND
+; v1.06e - add fcat and ram vars change
 ;         
 ;
-                    ORG   $8000   
-;                    ORG   $2000
+;                    ORG   $8000   
+                    ORG   $2000
 
 ; sdcard io addresses
 SDCRS:              EQU   0x40   
@@ -102,6 +103,14 @@ SDCSFRWDHDL:        EQU   0x4e ; file rewind handle
 SDCSFPKHDL:         EQU   0x50 ; file peek handle
 SDCSFPEEK:          EQU   0x52 ; file peek
 
+SDCSFWBHDL:         EQU   0x54 ; file writebytes handle
+SDCSFWRITEB:        EQU   0x56 ; file writebytes
+SDCSFWBSTAT:        EQU   0x58 ; file writebytes status
+
+SDCSFRBHDL:         EQU   0x5A ; file readbytes handle
+SDCSFREADB:         EQU   0x5C ; file readbytes
+SDCSFRBSTAT:        EQU   0x5E ; file readbytes status
+
 ; sdcard io commands start
 SDCMDRESET:          EQU   0x0f
 SDCMDLOAD:           EQU   0x0d
@@ -127,6 +136,9 @@ SDCMDFSEKCUR:        EQU   0x26
 SDCMDFSEKEND:        EQU   0x27
 SDCMDFREWIND:        EQU   0x28
 SDCMDFPEEK:          EQU   0x29
+
+SDCMDFWRITEB:        EQU   0x2A
+SDCMDFREADB:         EQU   0x2B
 
 ;
 ;
@@ -158,6 +170,8 @@ APIFSEEKCUR:         jp FSEEKCURAPI
 APIFSEEKEND:         jp FSEEKENDAPI
 APIFREWIND:          jp FREWINDAPI
 APIFPEEK:            jp FPEEKAPI
+;APIFWRITEB:          jp FWRITEBAPI
+;APIFREADB:           jp FREADBAPI
 
 ; just info
 MAIN:        
@@ -176,14 +190,14 @@ MAIN:
                     ; init LINEBUF to zero
                     ld hl,LINEBUF
                     ld de,LINEBUF+1
-                    ld bc, 0x0080
+                    ld bc, 0x0091
                     ld (hl), 0x00
                     ldir
 
                     ; get cmd string from user
                     ; call api: get input
                     ld de, LINEBUF
-                    ld a, $41 ; load string len + 1 (for terminator)
+                    ld a, $91 ; load string len + 1 (for terminator)
                     ld c, $04
                     rst   $30
 
@@ -588,8 +602,21 @@ MAIN_CHK24:
                     call FPEEKCLI
 
                     jp MAIN_END
-; call FSAVECLI
+;call FCATCLI
 MAIN_CHK25:
+                    ld hl, CMD_FCAT
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK26
+
+                    ; dispatch
+                    call FCATCLI
+
+                    jp MAIN_END
+
+; call FSAVECLI
+MAIN_CHK26:
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -890,7 +917,6 @@ FDELAPI:
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------                    
-
 FDELFN:
                     ; check idle status                    
                     call SDCIDLECHK
@@ -3223,6 +3249,21 @@ FOPENFN_OK4:
                     ld hl, OUT_BYTE
                     ld (hl), a
 
+                    ; file handle id must
+                    ; be greater than zero
+                    cp 0x00
+                    jr nz, FOPENFN_OK5
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x05
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret 
+FOPENFN_OK5:
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
@@ -3240,7 +3281,7 @@ FOPENFN_OK4:
                     ; set error code and
                     ; return to caller
                     ;push hl
-                    ld a, 0x05
+                    ld a, 0x06
                     ld hl, ERROR_CODE
                     ld (hl), a
                     ;pop hl
@@ -3388,7 +3429,7 @@ FCLOSEHL_OK2:
                     pop  af
                     pop  hl
 
-                    ; wait 10 ms before any
+                    ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
                     ld   de, 1
@@ -3416,6 +3457,14 @@ FCLOSEHL_OK3:
                     ;
                     ; operation ok
                     ;
+
+                    ; wait 10 ms before exit
+                    ; wait for sync on close
+                    push hl
+                    ld   de, 10
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
 
                     ld a, 0x00
                     ret
@@ -3769,27 +3818,6 @@ FREADCLI:
                     ret                 
 
 FREADCLI_OK:
-                    ;
-                    ; display result
-                    ;
-
-                    ; read memory variable
-                    ld hl, OUT_BYTE1
-                    ld a, (hl)
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
 
                     ;
                     ; display readed char
@@ -3813,11 +3841,32 @@ FREADCLI_OK:
                     ld a, '\r'
                     call OUTCHAR
 
+                    ;
+                    ; display result
+                    ;
+
+                    ; read memory variable
+                    ld hl, OUT_BYTE1
+                    ld a, (hl)
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, ' '
+                    call OUTCHAR 
+
                     ; and ok end message
                     ; using scm api
                     ld   de,STR_OK
                     ld   C,$06
                     rst   $30
+                    
                     ret
 
 ;--------------------------------------------------------
@@ -5976,11 +6025,271 @@ FREWINDFH_OK:
                     ret
 
 ;--------------------------------------------------------
+;
+; File cat - cat (int *strfname)
+;
+;--------------------------------------------------------
+                    ;
+                    ; multi operation
+                    ; 1 - file open
+                    ; 2 - file read (n times)
+                    ; 3 - file close
+                    ;
+;--------------------------------------------------------
+FCATCLI:     
+                    ;
+                    ; entry point from cli
+                    ;
+                    call FCATFN
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, FCATCLI_OK
+
+                    ; display error code
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ; separator
+                    ld a, ' '
+                    call OUTCHAR 
+
+                    ; read memory variable
+                    ; operation index in multi operations
+                    ld hl, TMP_BYTE2
+                    ld a, (hl)
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                 
+
+FCATCLI_OK:
+                    ; read memory variable
+                    ; hold file handle
+                    ;ld hl, TMP_BYTE
+                    ;ld a, (hl)
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+                                        ;
+                    ; display end message
+                    ; using scm api
+
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+FCATAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------  
+FCATFN:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,FCATFN_OK1
+; just info
+FCATFN_FAIL1:
+                    ret
+
+FCATFN_OK1:
+                    ;
+                    ; sdif status is ok to proceed
+                    ;
+                    ; prepare variables to call
+                    ; fopen routine
+                    ;
+
+                    ; reset the file handle id
+                    ; stored on memory
+                    ld hl, TMP_BYTE   
+                    ld (hl), 0x00
+
+                    ; we already have the
+                    ; the filename, but
+                    ; the open mode is
+                    ; allways 0000                 
+                    ld hl, FILE_START   
+                    ld (hl), 0x00
+                    inc hl                   
+                    ld (hl), 0x00
+                    
+                    ;
+                    ; open file
+                    ;
+
+                    ; signal that we are
+                    ; entering fopen fname omode
+                    ld hl, TMP_BYTE2  
+                    ld (hl), 0x01
+
+                    ; call fopen (not entering by api)
+                    call FOPENFN
+
+                    ; return if we have an error
+                    ; error is when a != 0 
+                    cp 0x00
+                    ret nz
+
+; just info
+FCATFN_OK2:
+                    ; store file handle in memory
+                    ld hl, OUT_BYTE
+                    ld a, (hl)
+                    ld hl, TMP_BYTE
+                    ld (hl), a
+
+                    ;
+                    ; read byte from file until it ends
+                    ; and display received char
+                    ; using fread (handle)
+                    ;
+
+                    ;
+                    ;
+                    ; prepare fread
+                    ;
+
+                    ; signal that we are
+                    ; entering fread handle_id
+                    ld hl, TMP_BYTE2  
+                    ld (hl), 0x02
+
+                    ; set file handle to close
+                    ; from the one in memory
+                    ld hl, TMP_BYTE
+                    ld a, (hl)
+                    ld hl, FILE_HDL
+                    ld (hl), a
+
+FCATFN_LOOP:
+                    ;
+                    ; read byte
+                    ;
+
+                    call FREADFH
+
+                    ; return if we have an error
+                    ; error is when a != 0 
+                    cp 0x00
+                    ret nz                     
+                    
+                    ; check the fread
+                    ; result status
+                    ld hl, OUT_BYTE1
+                    ld a, (hl)
+                    ; if != 1, is end of file
+                    cp 0x01
+                    jr nz, FCATFN_OK3
+
+                    ; get received byte
+                    ld hl, OUT_BYTE
+                    ld a, (hl)
+
+                    ; print it
+                    call OUTCHAR
+
+                    ; get received byte
+                    ld hl, OUT_BYTE
+                    ld a, (hl)
+
+                    ; check if is new line
+                    cp '\n'
+                    jr nz, FCATFN_LOOP 
+
+                    ; if it is print CR
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    jr FCATFN_LOOP
+
+FCATFN_OK3:
+                    ;
+                    ; prepare close file
+                    ;
+
+                    ; signal that we are
+                    ; entering fclose handle_id
+                    ld hl, TMP_BYTE2  
+                    ld (hl), 0x03
+
+                    ; file handle id already 
+                    ; in right address (was set on fread)
+
+                    ;
+                    ; close file
+                    ;
+                    call FCLOSEHL
+
+                    ; return if we have an error
+                    ; error is when a != 0 
+                    cp 0x00
+                    ret nz 
+
+
+FCATFN_OK:
+                    ;
+                    ; operation ok
+                    ;
+
+                    ; reset the file handle id
+                    ; stored on memory
+                    ld hl, TMP_BYTE   
+                    ld (hl), 0x00
+
+                    ld a, 0x00
+                    ret
+
+;--------------------------------------------------------
 ; 
 ; send file name or directory name
 ;
 ;--------------------------------------------------------
-
 SENDFNAME:      
                     ; point hl to start of string
                     ; caller must pass the 
@@ -6312,6 +6621,7 @@ CMD_FSEEKCUR:         DB      "FSEEKCUR",0
 CMD_FSEEKEND:         DB      "FSEEKEND",0
 CMD_FREWIND:          DB      "FREWIND",0
 CMD_FPEEK:            DB      "FPEEK",0
+CMD_FCAT:             DB      "CAT",0
 
 ;
 ; RAM zone - variables
@@ -6319,32 +6629,37 @@ CMD_FPEEK:            DB      "FPEEK",0
 
 ;                    ORG    $83E0
 ;                    ORG    $FAE0
-;                    ORG    $FA00
-                    ORG    $F000                  
+                    ORG    $FA00
+;                    ORG    $F000                  
 RAMDATA:
-; output
-ERROR_CODE:         DS $01
-OUT_BYTE:           DS $01
-OUT_BYTE1:          DS $01
-OUT_LONG:           DS $04 ; 4 bytes
-NUM_BYTES:          DS $02 ; 2 bytes
 
 ; input
-FILE_START:         DS $02 ; 2 bytes
+FILE_START:         DS $02 ; 2 bytes : memory start address / file open mode
 FILE_LEN:           DS $02 ; 2 bytes
 FILE_CMD:           DS $10 ; 16 bytes
-FILE_NAME:          DS $21 ; 33 bytes
-FILE_NAME1:         DS $21 ; 33 bytes
-FILE_OMODE:         DS $04 ; 4 bytes
+FILE_NAME:          DS $41 ; 65 bytes
+FILE_NAME1:         DS $41 ; 65 bytes
+FILE_OMODE:         DS $02 ; 2 bytes
 FILE_HDL:           DS $02 ; 2 bytes
-;FILE_BUF:           DS $81 ; 129 bytes
 
-LINETMP:            DS $41 ; 65 bytes
-LINEBUF:            DS $81 ; 129 bytes
+; reserved
+BYTES_RESERVED:     DS $0F ; 15 bytes
 
 ; output
-OUTBUFFER:          DS $81 ; 129 bytes
+ERROR_CODE:         DS $01
+OUT_BYTE:           DS $01 ; : store operation byte output
+OUT_BYTE1:          DS $01 ; : store firmware byte operation result
+OUT_LONG:           DS $04 ; 4 bytes
+NUM_BYTES:          DS $02 ; 2 bytes
+OUTBUFFER:          DS $41 ; 65 bytes
 
-;COFILEIDX:          DS $01 ; 1 byte
-;OFNUMBER:           DS $01 ; 1 byte
-;OFTABLE:            DS $0F ; 10 bytes
+; cli wrk
+CLI_ORG:            DS $02
+TMP_BYTE:           DS $01 ; 1 byte: File handle id
+;TMP_BYTE1:          DS $01 ; 1 byte: 
+TMP_BYTE2:          DS $01 ; 1 byte: multi operation stage (operation that call others)
+
+; cli input
+LINETMP:            DS $41 ; 65 bytes
+LINEBUF:            DS $91 ; 145 bytes
+
