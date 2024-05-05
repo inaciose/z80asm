@@ -43,26 +43,27 @@ Z80 exploration as SCM app
 - cat
 
 + commands to add:
+- help
 - format
 - volume (sd card info)
 
 # File management program API
 + the commands above (cli exploration) are also to be part of the 
 + commands (also available on SCM app (for testing)
-- fopen name HHHH                bool 	open (const char *path, uint8_t oflag=O_READ)
-- fclose HH                      bool 	close ()
-- fwrite HH HH00 (write byte)    size_t 	write (uint8_t b)
-- fread HH (read byte)           int16_t 	read ()
-- fgetpos HH                     uint32_t 	curPosition () const
-- fseekset HH HHHH HHHH          bool 	seekSet (uint32_t pos)
-- fseekcur HH HHHH HHHH          bool 	seekCur (int32_t offset)
-- fseekend HH HHHH HHHH          bool 	seekEnd (int32_t offset=0)
-- frewind HH                     void 	rewind ()
-- fpeek HH                       int 	peek ()
+- fopen name HHHH                             name openmode
+- fclose HH                                   handleid
+- fwrite HH HH (write byte)                   handleid byte
+- fwriteb HH HHHH HHHH (write n bytes)        handleid srcaddr numbytes
+- fread HH (read byte)                        handleid 
+- freadb HH HHHH HHHH (read n bytes)          handleid destaddr numbytes
+- fgetpos HH                                  handleid
+- fseekset HH HHHH HHHH                       handleid 	MSWORD LSWORD
+- fseekcur HH HHHH HHHH                       handleid 	MSWORD LSWORD (signed) FFFF FFFF = -1
+- fseekend HH HHHH HHHH                       handleid 	MSWORD LSWORD (signed) 0000 0000 = end
+- frewind HH                                  handleid
+- fpeek HH                                    handleid
 
 + commands to add:
-- int 	read (void *buf, size_t nbyte)
-- int 	write (const void *buf, size_t nbyte)
 - bool 	isDir () const
 - bool 	isFile () const
 - int 	write (const char *str)
@@ -73,7 +74,7 @@ Z80 exploration as SCM app
 - bool 	truncate (uint32_t size)
 - bool 	isOpen () const
 - bool 	isRoot () const
-- hdllist getofiles()
+- hdllist lsof()  (list openfiles)
 
 # Programer API - Interface for external program usage
 The developmente of API for interface with the programs is waiting for the development of the base I/O routines that is still a work in progress.

@@ -54,6 +54,8 @@
 ;          change its only the last delay on FWRITEFH_OK4
 ; v1.06g - cmd select improvement: add lenght compare
 ; v1.06h - add frwiteb (firmware 1.06b)
+; v1.06i - add freadb & change frwiteb and frwite to wait for SDC on sync
+;
 ;         
 ;
 ;                    ORG   $8000   
@@ -121,8 +123,7 @@ SDCSFRBSTAT:        EQU   0x5E ; file readbytes status
 SDCMDRESET:          EQU   0x0f
 SDCMDLOAD:           EQU   0x0d
 SDCMDSAVE:           EQU   0x0c
-;SDCMDWRITE:          EQU   0x
-SDCMDWREND:          EQU   0x0b
+SDCMDRWEND:          EQU   0x0b
 SDCMDLIST:           EQU   0x0e
 SDCMDDEL:            EQU   0x0a
 SDCMDREN:            EQU   0x10
@@ -152,7 +153,7 @@ SDCMDFREADB:         EQU   0x2B
 ; address to calling routines
 ; api call jump table 
 ;
-CLIENTRY:            jp MAIN
+CLIENTRY:            jr MAIN
 APIFSAVE:            jp FSAVEAPI
 APIFLOAD:            jp FLOADAPI
 APIFDEL:             jp FDELAPI
@@ -177,7 +178,7 @@ APIFSEEKEND:         jp FSEEKENDAPI
 APIFREWIND:          jp FREWINDAPI
 APIFPEEK:            jp FPEEKAPI
 APIFWRITEB:          jp FWRITEBAPI
-;APIFREADB:           jp FREADBAPI
+APIFREADB:           jp FREADBAPI
 
 ; just info
 MAIN:        
@@ -1033,8 +1034,53 @@ MAIN_CHK26:
 
                     jp MAIN_END
 
-; call FSAVECLI
+;call FREADBCLI
 MAIN_CHK27:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FREADB
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK28
+
+                    ; ok same lenght
+                    ld hl, CMD_FREADB
+                    ld de, FILE_CMD
+
+                    call STRCMP
+                    jr nz, MAIN_CHK28
+
+                    ; prepare dispatch
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
+
+                    ; debug message
+                    ; call api: print str
+                    ;ld   de,CMD_FWRITEB
+                    ;ld   c,$06
+                    ;rst  $30
+
+                    ; output nl & cr
+                    ;ld a, '\n'
+                    ;call OUTCHAR
+                    ;ld a, '\r'
+                    ;call OUTCHAR  
+
+                    ; dispatch
+                    call FREADBCLI
+
+                    jp MAIN_END
+
+; call FSAVECLI
+MAIN_CHK28:
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_SAVE
@@ -1864,7 +1910,7 @@ FSAVEWDLOOP:
 
                     ; end file write
                     ; load cmd code in a, see equs
-                    ld   a,SDCMDWREND ;0x0b   
+                    ld   a,SDCMDRWEND ;0x0b   
                     out  (SDCWC),a   
 
 ; just info
@@ -4179,15 +4225,28 @@ FWRITEFH_OK4:
                     ld hl, OUT_BYTE1
                     ld (hl), a
 
+                    ; prepare time wait for
+                    ; sdcard to write data
+                    ld b, 0xff
+
+FWRITEWIDLE:
+                    ; check for wait
+                    ; for idle timeout
+                    ld a, b
+                    cp 0x00
+                    jr z, FWRITEIDLETOUT
+
                     ; wait many ms before any
                     ; in or out to SD card
-                    ; with sync, we need 20
-                    ; TODO: should loop until
+                    ; with sync we need
+                    ; at least 20ms
+                    push bc
                     push hl
-                    ld   de, 20
+                    ld   de, 10
                     ld   c, $0a
                     rst  $30
                     pop  hl
+                    pop bc
                     
                     ; get sdif status
                     in   a,(SDCRS)   
@@ -4195,6 +4254,13 @@ FWRITEFH_OK4:
                     cp   SDCSIDL
                     jr   z, FWRITEFH_OK
                     
+                    ; continue waiting
+                    ; for idle, until
+                    ; b == 0, or status idle
+                    dec b
+                    jr FWRITEWIDLE
+
+FWRITEIDLETOUT: 
                     ; set error code and
                     ; return to caller
                     ;push hl
@@ -4506,20 +4572,8 @@ FWRITEBWDLOOP:
                     jr FWRITEBWDEND
 
 FWRITEBWDERR:
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    ; there is an error reading
+                    ; maybe media is out of space
 
                     ;restore registers
                     pop af
@@ -4545,7 +4599,7 @@ FWRITEBWDEND:
 
                     ; signal end of write bytes
                     ; load cmd code in a, see equs
-                    ld   a,SDCMDWREND ;0x0b   
+                    ld   a,SDCMDRWEND ;0x0b   
                     out  (SDCWC),a   
 
 FWRITEBWDEND_OK1: 
@@ -4610,7 +4664,6 @@ FWRITEBWDRES:
                     rst  $30
                     pop  hl
                     
-
                     ; get data (2nd byte)
                     in   a,(SDCRD)
 
@@ -4618,20 +4671,42 @@ FWRITEBWDRES:
                     inc hl
                     ld (hl), a
 
+                    ; prepare time wait for
+                    ; sdcard to write data
+                    ld b, 0xff
+
+FWRITEBWIDLE:
+                    ; check for wait
+                    ; for idle timeout
+                    ld a, b
+                    cp 0x00
+                    jr z, FWRITEBIDLETOUT
+                    
                     ; wait many ms before any
                     ; in or out to SD card
+                    ; with sync we need
+                    ; at least 40ms
+                    push bc
                     push hl
-                    ld   de, 40
+                    ld   de, 10
                     ld   c, $0a
                     rst  $30
                     pop  hl
+                    pop bc
 
                     ; get sdif status
                     in   a,(SDCRS)   
                     ; if status is not ok exit
                     cp   SDCSIDL
                     jr   z, FWRITEBEND_OK
-                    
+
+                    ; continue waiting
+                    ; for idle, until
+                    ; b == 0, or status idle
+                    dec b
+                    jr FWRITEBWIDLE
+
+FWRITEBIDLETOUT:                    
                     ; set error code and
                     ; return to caller
                     ;push hl
@@ -4955,6 +5030,428 @@ FREADFH_OK:
                     ; operation ok
                     ;
 
+                    ld a, 0x00
+                    ret
+
+;--------------------------------------------------------
+;
+; Read bytes from file  freadb (int *ofhld, int *address, int *nbytes )
+;
+;--------------------------------------------------------
+;--------------------------------------------------------
+FREADBCLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call FREADBFH
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, FREADBCLI_OK
+
+                    ; display error code
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                                 
+
+FREADBCLI_OK:
+                    ; read memory variable
+                    ; hold file handle
+                    ld hl, NUM_BYTES
+                    ; read MSB
+                    inc hl
+                    ld a, (hl)
+
+                    push hl
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ; read LSB
+                    pop hl
+                    dec hl         
+                    ld a, (hl)
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display ok end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+FREADBAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+FREADBFH:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,FREADBFH_OK1 
+
+; just info
+FREADBFH_FAIL1:
+                    ret
+
+FREADBFH_OK1:
+                    ;
+                    ; sdif status is ok to proceed
+                    ;                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start save file process
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDFREADB   
+                    out   (SDCWC),a
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; check sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFRBHDL
+                    jr   z,FREADBFH_OK2
+                    
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                      
+                    
+FREADBFH_OK2:
+                    ; ready to send the
+                    ; hdl id of file to close
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_HDL
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                   
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFREADB
+                    jr   z, FREADBWD_OK  
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                 
+
+FREADBWD_OK:
+                    ;
+                    ; ready to save data on file
+                    ;
+                    
+                    ; point hl to start of memory
+                    ld hl,FILE_START
+                    ld d, (hl)
+                    inc hl
+                    ld e, (hl)
+                    ; need to get de in hl
+                    ld h, d
+                    ld l, e
+
+                    push hl
+                    ;
+                    ld hl,FILE_LEN
+                    ld d, (hl)
+                    inc hl
+                    ld e, (hl)
+                    ;
+                    pop hl
+                                        
+                    ld   c,SDCRD 
+                    
+FREADBRDLOOP:      
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push de
+                    push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+                    pop de
+
+                    ; check if media
+                    ; gives error
+                    push de
+                    push bc
+                    push hl
+                    push af
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFREADB
+                    jr   nz, FREADBRDERR
+
+                    pop af
+                    pop hl
+                    pop bc
+                    pop de
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push de
+                    push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+                    pop de
+
+                    ; input one memory byte
+                    ini
+                    
+                    ; control if its over
+                    dec de
+                    
+                    ; check if de is zero
+                    ;push a
+                    ld a, d
+                    or e
+                    ;pop a
+                    
+                    ; not zero
+                    jr nz,FREADBRDLOOP
+
+                    jr FREADBRDEND
+
+FREADBRDERR:
+                    ; there is an error reading
+                    ; maybe end of file is reached
+                    ; convert to hex
+
+                    ;restore registers
+                    pop af
+                    pop hl
+                    pop bc
+                    pop de
+
+                    ; dont need signal end of write bytes
+                    jr FREADBRDEND_OK1
+
+FREADBRDEND:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push de
+                    push bc
+                    push hl
+                    ld de, 1
+                    ld c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+                    pop de
+
+                    ; signal end of write bytes
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDRWEND ;0x0b   
+                    out  (SDCWC),a   
+
+FREADBRDEND_OK1: 
+                    ;
+                    ; operation done
+                    ; check the status
+                    ;
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    ;push de
+                    push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+                    ;pop de
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if ok its idle state
+                    cp   SDCSFRBSTAT   
+                    jr   z,FREADBRDRES   
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x04
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret 
+
+FREADBRDRES:
+
+                    ; read operation result
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get data (1st byte)
+                    in   a,(SDCRD)   
+                    
+                    ; store data in memory 
+                    ld hl, NUM_BYTES
+                    ld (hl), a
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                    
+                    ; get data (2nd byte)
+                    in   a,(SDCRD)
+
+                    ; store data in memory 
+                    inc hl
+                    ld (hl), a
+
+                    ; wait many ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSIDL
+                    jr   z, FREADBEND_OK
+                    
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x05
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret 
+
+FREADBEND_OK:                    
+                    ;
+                    ; operation ok
+                    ;
                     ld a, 0x00
                     ret
 
