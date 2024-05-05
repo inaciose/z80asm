@@ -62,6 +62,7 @@ Z80 exploration as SCM app
 - fseekend HH HHHH HHHH                       handleid 	MSWORD LSWORD (signed) 0000 0000 = end
 - frewind HH                                  handleid
 - fpeek HH                                    handleid
+- ftruncate HH HHHH HHHH                      handleid 	MSWORD LSWORD
 
 + commands to add:
 - bool 	isDir () const
@@ -71,7 +72,6 @@ Z80 exploration as SCM app
 
 + commands to add that requires changes in firmware:
 - uint32_t 	fileSize () const
-- bool 	truncate (uint32_t size)
 - bool 	isOpen () const
 - bool 	isRoot () const
 - hdllist lsof()  (list openfiles)

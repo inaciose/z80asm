@@ -53,8 +53,9 @@
 ;          it is not ok. need to read twice. Like 'cat a.txt', after 'cat a.txt'
 ;          change its only the last delay on FWRITEFH_OK4
 ; v1.06g - cmd select improvement: add lenght compare
-; v1.06h - add frwiteb (firmware 1.06b)
+; v1.06h - add frwiteb (firmware v1.06b)
 ; v1.06i - add freadb & change frwiteb and frwite to wait for SDC on sync
+; v1.06j - add ftruncate (firmware v1.06c )
 ;
 ;         
 ;
@@ -110,14 +111,15 @@ SDCSFSESTAT:        EQU   0x4c ; file seekend status
 SDCSFRWDHDL:        EQU   0x4e ; file rewind handle
 SDCSFPKHDL:         EQU   0x50 ; file peek handle
 SDCSFPEEK:          EQU   0x52 ; file peek
-
 SDCSFWBHDL:         EQU   0x54 ; file writebytes handle
 SDCSFWRITEB:        EQU   0x56 ; file writebytes
 SDCSFWBSTAT:        EQU   0x58 ; file writebytes status
-
 SDCSFRBHDL:         EQU   0x5A ; file readbytes handle
 SDCSFREADB:         EQU   0x5C ; file readbytes
 SDCSFRBSTAT:        EQU   0x5E ; file readbytes status
+SDCSFTRCTHDL:       EQU   0x60 ; file truncate handle
+SDCSFTRUNCATE:      EQU   0x62 ; file truncate
+SDCSFTRCTSTAT:      EQU   0x64 ; file truncate status
 
 ; sdcard io commands start
 SDCMDRESET:          EQU   0x0f
@@ -143,9 +145,9 @@ SDCMDFSEKCUR:        EQU   0x26
 SDCMDFSEKEND:        EQU   0x27
 SDCMDFREWIND:        EQU   0x28
 SDCMDFPEEK:          EQU   0x29
-
 SDCMDFWRITEB:        EQU   0x2A
 SDCMDFREADB:         EQU   0x2B
+SDCMDFTRUNCATE:      EQU   0x2C
 
 ;
 ;
@@ -179,6 +181,7 @@ APIFREWIND:          jp FREWINDAPI
 APIFPEEK:            jp FPEEKAPI
 APIFWRITEB:          jp FWRITEBAPI
 APIFREADB:           jp FREADBAPI
+APIFTRUNCATE:        jp FTRUNCATEAPI
 
 ; just info
 MAIN:        
@@ -1079,8 +1082,41 @@ MAIN_CHK27:
 
                     jp MAIN_END
 
-; call FSAVECLI
+;call FTRUNCATECLI
 MAIN_CHK28:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FTRUNCATE
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK29
+
+                    ; ok same lenght
+                    ld hl, CMD_FTRUNCATE
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK29
+
+                    ; prepare dispatch
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
+
+                    ; dispatch
+                    call FTRUNCATECLI
+
+                    jp MAIN_END
+
+; call FSAVECLI
+MAIN_CHK29:
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_SAVE
@@ -7394,6 +7430,399 @@ FREWINDFH_OK:
 
 ;--------------------------------------------------------
 ;
+; File position set - seekend (int *ofhld, int32 p)
+;
+;--------------------------------------------------------
+;--------------------------------------------------------
+FTRUNCATECLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call FTRUNCATEFH
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, FTRUNCATECLI_OK
+
+                    ; display error code
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                 
+
+FTRUNCATECLI_OK:
+                    ;
+                    ; display result
+                    ;
+
+                    ; read memory variable
+                    ld hl, OUT_BYTE1
+                    ld a, (hl)
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; and ok end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+FTRUNCATEAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+FTRUNCATEFH:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,FTRUNCATEFH_OK1 
+
+; just info
+FTRUNCATEFH_FAIL1:
+                    ret
+
+FTRUNCATEFH_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start truncate file
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDFTRUNCATE   
+                    out   (SDCWC),a
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFTRCTHDL
+                    jr   z,FTRUNCATEFH_OK2
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+
+FTRUNCATEFH_OK2:
+                    ; ready to send the
+                    ; hdl id of file to close
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_HDL
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                   
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; is the send mode state?
+                    cp   SDCSFTRUNCATE
+                    jr   z, FTRUNCATEFH_OK3  
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                 
+
+FTRUNCATEFH_OK3:
+                    ; ready to send the four bytes (32bits)
+                    ; to set position on file
+
+                    ; we use:
+                    ; - FILE_START 16bits
+                    ; - FILE_LEN 16bits
+
+                    ;
+                    ; first the FILE_START
+                    ;
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_START
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send LB
+                    inc  hl
+                    ld   a, (hl)
+
+                    out (SDCWD),a
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ;
+                    ; now the FILE_LEN
+                    ;
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_LEN
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    ; wait a ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send LB
+                    inc  hl
+                    ld   a, (hl)
+
+                    out (SDCWD),a
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 10
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                   
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; is the send operation result state?
+                    cp   SDCSFTRCTSTAT
+                    jr   z, FTRUNCATEFH_OK4  
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x04
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                  
+
+FTRUNCATEFH_OK4:
+                    ; read operation result
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get data
+                    in   a,(SDCRD)   
+                    
+                    ; store data in memory
+                    ld hl, OUT_BYTE1
+                    ld (hl), a
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; is rn file destination state ?
+                    cp   SDCSIDL
+                    jr   z, FTRUNCATEFH_OK
+                    
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x05
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret 
+
+FTRUNCATEFH_OK:
+                    ;
+                    ; operation ok
+                    ;
+
+                    ld a, 0x00
+                    ret
+
+
+;--------------------------------------------------------
+;
 ; File cat - cat (int *strfname)
 ;
 ;--------------------------------------------------------
@@ -7988,27 +8417,28 @@ CMD_DEL:             DB      "DEL",0
 CMD_LIST:            DB      "LIST",0
 CMD_REN:             DB      "REN",0
 CMD_COPY:            DB      "COPY",0
-CMD_EXIST:            DB      "EXIST",0
-CMD_MKDIR:            DB      "MKDIR",0
-CMD_RMDIR:            DB      "RMDIR",0
-CMD_CD:               DB      "CD",0
-CMD_CWD:              DB      "CWD",0
-CMD_EXIT:             DB      "EXIT",0
-CMD_RESET:            DB      "RESET",0
-CMD_SDIFS:            DB      "SDIFS",0
-CMD_FOPEN:            DB      "FOPEN",0
-CMD_FCLOSE:           DB      "FCLOSE",0
-CMD_FWRITE:           DB      "FWRITE",0
-CMD_FREAD:            DB      "FREAD",0
-CMD_FGETPOS:          DB      "FGETPOS",0 ;FTELL
-CMD_FSEEKSET:         DB      "FSEEKSET",0
-CMD_FSEEKCUR:         DB      "FSEEKCUR",0
-CMD_FSEEKEND:         DB      "FSEEKEND",0
-CMD_FREWIND:          DB      "FREWIND",0
-CMD_FPEEK:            DB      "FPEEK",0
-CMD_FCAT:             DB      "CAT",0
-CMD_FWRITEB:           DB      "FWRITEB",0
-CMD_FREADB:            DB      "FREADB",0
+CMD_EXIST:           DB      "EXIST",0
+CMD_MKDIR:           DB      "MKDIR",0
+CMD_RMDIR:           DB      "RMDIR",0
+CMD_CD:              DB      "CD",0
+CMD_CWD:             DB      "CWD",0
+CMD_EXIT:            DB      "EXIT",0
+CMD_RESET:           DB      "RESET",0
+CMD_SDIFS:           DB      "SDIFS",0
+CMD_FOPEN:           DB      "FOPEN",0
+CMD_FCLOSE:          DB      "FCLOSE",0
+CMD_FWRITE:          DB      "FWRITE",0
+CMD_FREAD:           DB      "FREAD",0
+CMD_FGETPOS:         DB      "FGETPOS",0 ;FTELL
+CMD_FSEEKSET:        DB      "FSEEKSET",0
+CMD_FSEEKCUR:        DB      "FSEEKCUR",0
+CMD_FSEEKEND:        DB      "FSEEKEND",0
+CMD_FREWIND:         DB      "FREWIND",0
+CMD_FPEEK:           DB      "FPEEK",0
+CMD_FCAT:            DB      "CAT",0
+CMD_FWRITEB:         DB      "FWRITEB",0
+CMD_FREADB:          DB      "FREADB",0
+CMD_FTRUNCATE:       DB      "FTRUNCATE",0
 
 ;
 ; RAM zone - variables
@@ -8023,7 +8453,6 @@ RAMDATA:
 ; input
 FILE_START:         DS $02 ; 2 bytes : memory start address / file open mode
 FILE_LEN:           DS $02 ; 2 bytes
-FILE_CMD:           DS $10 ; 16 bytes
 FILE_NAME:          DS $41 ; 65 bytes
 FILE_NAME1:         DS $41 ; 65 bytes
 FILE_OMODE:         DS $02 ; 2 bytes
@@ -8041,6 +8470,7 @@ NUM_BYTES:          DS $02 ; 2 bytes
 OUTBUFFER:          DS $41 ; 65 bytes
 
 ; cli wrk
+FILE_CMD:           DS $10 ; 16 bytes
 CLI_ORG:            DS $02
 TMP_BYTE:           DS $01 ; 1 byte: File handle id
 ;TMP_BYTE1:          DS $01 ; 1 byte: 
