@@ -52,6 +52,7 @@
 ;          without the sync the reading, after close the file,
 ;          it is not ok. need to read twice. Like 'cat a.txt', after 'cat a.txt'
 ;          change its only the last delay on FWRITEFH_OK4
+; v1.06g - cmd select improvement: add lenght compare
 ;         
 ;
 ;                    ORG   $8000   
@@ -191,6 +192,14 @@ MAIN:
                     ld   C,$06
                     rst   $30 
 
+
+                    ; init LINETMP to zero
+                    ld hl,LINETMP
+                    ld de,LINETMP+1
+                    ld bc, 0x0041
+                    ld (hl), 0x00
+                    ldir
+
                     ; init LINEBUF to zero
                     ld hl,LINEBUF
                     ld de,LINEBUF+1
@@ -255,6 +264,21 @@ MAIN:
                     jp MAIN_END
                     
 MAIN_CHK1:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_LIST
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK2
+
+                    ; ok same lenght
                     ld hl, CMD_LIST
                     ld de, FILE_CMD
                     
@@ -268,6 +292,21 @@ MAIN_CHK1:
 
 ;call FLOADCLI
 MAIN_CHK2:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_LOAD
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK3
+
+                    ; ok same lenght
                     ld hl, CMD_LOAD
                     ld de, FILE_CMD
                     
@@ -281,6 +320,21 @@ MAIN_CHK2:
 
 ;call FRENCLI
 MAIN_CHK3:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_REN
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK4
+
+                    ; ok same lenght
                     ld hl, CMD_REN
                     ld de, FILE_CMD
                     
@@ -294,6 +348,21 @@ MAIN_CHK3:
 
 ;call FCOPYCLI
 MAIN_CHK4:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_COPY
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK5
+
+                    ; ok same lenght
                     ld hl, CMD_COPY
                     ld de, FILE_CMD
                     
@@ -307,6 +376,21 @@ MAIN_CHK4:
 
 ;call FEXISTCLI
 MAIN_CHK5:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_EXIST
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK6
+
+                    ; ok same lenght
                     ld hl, CMD_EXIST
                     ld de, FILE_CMD
                     
@@ -320,6 +404,21 @@ MAIN_CHK5:
 
 ;call MKDIRCLI
 MAIN_CHK6:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_MKDIR
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK7
+
+                    ; ok same lenght
                     ld hl, CMD_MKDIR
                     ld de, FILE_CMD
                     
@@ -333,6 +432,21 @@ MAIN_CHK6:
 
 ;call RMDIRCLI
 MAIN_CHK7:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_RMDIR
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK8
+
+                    ; ok same lenght
                     ld hl, CMD_RMDIR
                     ld de, FILE_CMD
                     
@@ -346,6 +460,21 @@ MAIN_CHK7:
 
 ;call CDCLI
 MAIN_CHK8:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_CD
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK9
+
+                    ; ok same lenght
                     ld hl, CMD_CD
                     ld de, FILE_CMD
                     
@@ -359,6 +488,21 @@ MAIN_CHK8:
 
 ;call CWDNCLI
 MAIN_CHK9:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_CWD
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK10
+
+                    ; ok same lenght
                     ld hl, CMD_CWD
                     ld de, FILE_CMD
                     
@@ -372,6 +516,21 @@ MAIN_CHK9:
 
 
 MAIN_CHK10:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_EXIT
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK11
+
+                    ; ok same lenght
                     ld hl, CMD_EXIT
                     ld de, FILE_CMD
                     
@@ -395,6 +554,21 @@ MAIN_CHK11:
                     ;jp MAIN_END
 ;call SDIFRESETCLI
 MAIN_CHK12:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_RESET
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK13
+
+                    ; ok same lenght
                     ld hl, CMD_RESET
                     ld de, FILE_CMD
                     
@@ -408,6 +582,21 @@ MAIN_CHK12:
 
 ;call GETSDIFSCLI
 MAIN_CHK13:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_SDIFS
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK14
+
+                    ; ok same lenght
                     ld hl, CMD_SDIFS
                     ld de, FILE_CMD
                     
@@ -421,6 +610,21 @@ MAIN_CHK13:
 
 ;call FDELCLI
 MAIN_CHK14:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_DEL
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK15
+
+                    ; ok same lenght
                     ld hl, CMD_DEL
                     ld de, FILE_CMD
                     
@@ -434,6 +638,21 @@ MAIN_CHK14:
 
 ;call FOPENCLI
 MAIN_CHK15:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FOPEN
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK16
+
+                    ; ok same lenght
                     ld hl, CMD_FOPEN
                     ld de, FILE_CMD
                     
@@ -447,6 +666,21 @@ MAIN_CHK15:
 
 ;call FCLOSECLI
 MAIN_CHK16:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FCLOSE
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK17
+
+                    ; ok same lenght
                     ld hl, CMD_FCLOSE
                     ld de, FILE_CMD
                     
@@ -465,6 +699,21 @@ MAIN_CHK16:
 
 ;call FWRITECLI
 MAIN_CHK17:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FWRITE
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK18
+
+                    ; ok same lenght
                     ld hl, CMD_FWRITE
                     ld de, FILE_CMD
                     
@@ -483,6 +732,21 @@ MAIN_CHK17:
 
 ;class FREADCLI
 MAIN_CHK18:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FREAD
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK19
+
+                    ; ok same lenght
                     ld hl, CMD_FREAD
                     ld de, FILE_CMD
                     
@@ -501,6 +765,21 @@ MAIN_CHK18:
 
 ;call FTELLCLI
 MAIN_CHK19:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FGETPOS
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK20
+
+                    ; ok same lenght
                     ld hl, CMD_FGETPOS
                     ld de, FILE_CMD
                     
@@ -519,6 +798,21 @@ MAIN_CHK19:
 
 ;call FSEEKSETCLI
 MAIN_CHK20:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FSEEKSET
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK21
+
+                    ; ok same lenght
                     ld hl, CMD_FSEEKSET
                     ld de, FILE_CMD
                     
@@ -537,6 +831,21 @@ MAIN_CHK20:
 
 ;call FSEEKCURCLI
 MAIN_CHK21:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FSEEKCUR
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK22
+
+                    ; ok same lenght
                     ld hl, CMD_FSEEKCUR
                     ld de, FILE_CMD
                     
@@ -555,6 +864,21 @@ MAIN_CHK21:
 
 ;call FSEEKENDCLI
 MAIN_CHK22:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FSEEKEND
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK23
+
+                    ; ok same lenght
                     ld hl, CMD_FSEEKEND
                     ld de, FILE_CMD
                     
@@ -573,6 +897,21 @@ MAIN_CHK22:
 
 ;call FREWINDCLI
 MAIN_CHK23:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FREWIND
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK24
+
+                    ; ok same lenght
                     ld hl, CMD_FREWIND
                     ld de, FILE_CMD
                     
@@ -591,6 +930,21 @@ MAIN_CHK23:
 
 ;call FPEEKCLI
 MAIN_CHK24:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FPEEK
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK25
+
+                    ; ok same lenght
                     ld hl, CMD_FPEEK
                     ld de, FILE_CMD
                     
@@ -606,13 +960,72 @@ MAIN_CHK24:
                     call FPEEKCLI
 
                     jp MAIN_END
-;call FCATCLI
+;call FWRITEBCLI
 MAIN_CHK25:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FWRITEB
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK26
+
+                    ; ok same lenght
+                    ld hl, CMD_FWRITEB
+                    ld de, FILE_CMD
+
+                    call STRCMP
+                    jr nz, MAIN_CHK26
+
+                    ; prepare dispatch
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    ;call FNAME2FHDL
+
+                    ; display start message
+                    ; call api: print str
+                    ld   de,CMD_FWRITEB
+                    ld   c,$06
+                    rst  $30
+
+                    ; output nl & cr
+                    ld a, '\n'
+                    call OUTCHAR
+                    ld a, '\r'
+                    call OUTCHAR  
+
+                    ; dispatch
+                    ;call FWRITEBCLI
+
+                    jp MAIN_END
+;call FCATCLI
+MAIN_CHK26:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FCAT
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK27
+
+                    ; ok same lenght
                     ld hl, CMD_FCAT
                     ld de, FILE_CMD
                     
                     call STRCMP
-                    jr nz, MAIN_CHK26
+                    jr nz, MAIN_CHK27
 
                     ; dispatch
                     call FCATCLI
@@ -620,7 +1033,22 @@ MAIN_CHK25:
                     jp MAIN_END
 
 ; call FSAVECLI
-MAIN_CHK26:
+MAIN_CHK27:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_SAVE
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_END
+
+                    ; ok same lenght
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
@@ -6392,6 +6820,23 @@ SDCIDLECHK_OK:
 ; STRINGS
 ; 
 ;--------------------------------------------
+STRLEN:            
+            PUSH    HL 
+            LD      B,0 
+STRLEN00:            
+            LD      A,(HL) 
+            CP      0 ;"\0"
+            JR      Z,STRLEN01 
+            INC     HL 
+            INC     B 
+            JR      STRLEN00 
+STRLEN01:            
+            POP     HL 
+            LD      A,B 
+            RET 
+
+;--------------------------------------------
+
 
 STRCMP:
             ; input: hl address string1
@@ -6628,6 +7073,8 @@ CMD_FSEEKEND:         DB      "FSEEKEND",0
 CMD_FREWIND:          DB      "FREWIND",0
 CMD_FPEEK:            DB      "FPEEK",0
 CMD_FCAT:             DB      "CAT",0
+CMD_FWRITEB:           DB      "FWRITEB",0
+CMD_FREADB:            DB      "FREADB",0
 
 ;
 ; RAM zone - variables
