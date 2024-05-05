@@ -53,6 +53,7 @@
 ;          it is not ok. need to read twice. Like 'cat a.txt', after 'cat a.txt'
 ;          change its only the last delay on FWRITEFH_OK4
 ; v1.06g - cmd select improvement: add lenght compare
+; v1.06h - add frwiteb (firmware 1.06b)
 ;         
 ;
 ;                    ORG   $8000   
@@ -175,7 +176,7 @@ APIFSEEKCUR:         jp FSEEKCURAPI
 APIFSEEKEND:         jp FSEEKENDAPI
 APIFREWIND:          jp FREWINDAPI
 APIFPEEK:            jp FPEEKAPI
-;APIFWRITEB:          jp FWRITEBAPI
+APIFWRITEB:          jp FWRITEBAPI
 ;APIFREADB:           jp FREADBAPI
 
 ; just info
@@ -986,22 +987,22 @@ MAIN_CHK25:
                     ; prepare dispatch
                     ; FILE_NAME to numeric 
                     ; bin at FILE_HDL
-                    ;call FNAME2FHDL
+                    call FNAME2FHDL
 
-                    ; display start message
+                    ; debug message
                     ; call api: print str
-                    ld   de,CMD_FWRITEB
-                    ld   c,$06
-                    rst  $30
+                    ;ld   de,CMD_FWRITEB
+                    ;ld   c,$06
+                    ;rst  $30
 
                     ; output nl & cr
-                    ld a, '\n'
-                    call OUTCHAR
-                    ld a, '\r'
-                    call OUTCHAR  
+                    ;ld a, '\n'
+                    ;call OUTCHAR
+                    ;ld a, '\r'
+                    ;call OUTCHAR  
 
                     ; dispatch
-                    ;call FWRITEBCLI
+                    call FWRITEBCLI
 
                     jp MAIN_END
 ;call FCATCLI
@@ -4209,6 +4210,442 @@ FWRITEFH_OK:
                     ; operation ok
                     ;
 
+                    ld a, 0x00
+                    ret
+
+;--------------------------------------------------------
+;
+; write bytes to file fwriteb (int *ofhld, int *address, int *nbytes )
+;
+;--------------------------------------------------------
+;--------------------------------------------------------
+FWRITEBCLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call FWRITEBFH
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, FWRITEBCLI_OK
+
+                    ; display error code
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                                 
+
+FWRITEBCLI_OK:
+                    ; read memory variable
+                    ; hold file handle
+                    ld hl, NUM_BYTES
+                    ; read MSB
+                    inc hl
+                    ld a, (hl)
+
+                    push hl
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ; read LSB
+                    pop hl
+                    dec hl         
+                    ld a, (hl)
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display ok end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+FWRITEBAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+FWRITEBFH:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,FWRITEBFH_OK1 
+
+; just info
+FWRITEBFH_FAIL1:
+                    ret
+
+FWRITEBFH_OK1:
+                    ;
+                    ; sdif status is ok to proceed
+                    ;                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start save file process
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDFWRITEB   
+                    out   (SDCWC),a
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; check sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFWBHDL
+                    jr   z,FWRITEBFH_OK2
+                    
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                      
+                    
+FWRITEBFH_OK2:
+                    ; ready to send the
+                    ; hdl id of file to close
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_HDL
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                   
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFWRITEB
+                    jr   z, FWRITEBWD_OK  
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                 
+
+FWRITEBWD_OK:
+                    ;
+                    ; ready to save data on file
+                    ;
+                    
+                    ; point hl to start of memory
+                    ld hl,FILE_START
+                    ld d, (hl)
+                    inc hl
+                    ld e, (hl)
+                    ; need to get de in hl
+                    ld h, d
+                    ld l, e
+
+                    push hl
+                    ;
+                    ld hl,FILE_LEN
+                    ld d, (hl)
+                    inc hl
+                    ld e, (hl)
+                    ;
+                    pop hl
+                                        
+                    ld   c,SDCWD 
+                    
+FWRITEBWDLOOP:      
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push de
+                    push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+                    pop de
+
+                    ; check if media
+                    ; gives error
+                    push de
+                    push bc
+                    push hl
+                    push af
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFWRITEB
+                    jr   nz, FWRITEBWDERR
+
+                    pop af
+                    pop hl
+                    pop bc
+                    pop de
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push de
+                    push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+                    pop de
+
+                    ; output one memory byte
+                    outi
+                    
+                    ; control if its over
+                    dec de
+                    
+                    ; check if de is zero
+                    ;push a
+                    ld a, d
+                    or e
+                    ;pop a
+                    
+                    ; not zero
+                    jr nz,FWRITEBWDLOOP
+
+                    jr FWRITEBWDEND
+
+FWRITEBWDERR:
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ;restore registers
+                    pop af
+                    pop hl
+                    pop bc
+                    pop de
+
+                    ; dont need signal end of write bytes
+                    jr FWRITEBWDEND_OK1
+
+FWRITEBWDEND:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push de
+                    push bc
+                    push hl
+                    ld de, 1
+                    ld c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+                    pop de
+
+                    ; signal end of write bytes
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDWREND ;0x0b   
+                    out  (SDCWC),a   
+
+FWRITEBWDEND_OK1: 
+                    ;
+                    ; operation done
+                    ; check the status
+                    ;
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    ;push de
+                    push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+                    ;pop de
+
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if ok its idle state
+                    cp   SDCSFWBSTAT   
+                    jr   z,FWRITEBWDRES   
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x04
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret 
+
+FWRITEBWDRES:
+
+                    ; read operation result
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get data (1st byte)
+                    in   a,(SDCRD)   
+                    
+                    ; store data in memory 
+                    ld hl, NUM_BYTES
+                    ld (hl), a
+
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                    
+
+                    ; get data (2nd byte)
+                    in   a,(SDCRD)
+
+                    ; store data in memory 
+                    inc hl
+                    ld (hl), a
+
+                    ; wait many ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 40
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSIDL
+                    jr   z, FWRITEBEND_OK
+                    
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x05
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret 
+
+FWRITEBEND_OK:                    
+                    ;
+                    ; operation ok
+                    ;
                     ld a, 0x00
                     ret
 
