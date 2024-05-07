@@ -57,6 +57,7 @@
 ; v1.06i - add freadb & change frwiteb and frwite to wait for SDC on sync
 ; v1.06j - add ftruncate (firmware v1.06c )
 ; v1.06k - add lsof (firmware v1.06d)
+; v1.06l - add getfsize (firmware v1.06e)
 ;
 ;         
 ;
@@ -122,6 +123,8 @@ SDCSFTRCTHDL:       EQU   0x60 ; file truncate handle
 SDCSFTRUNCATE:      EQU   0x62 ; file truncate
 SDCSFTRCTSTAT:      EQU   0x64 ; file truncate status
 SDCSLSOFRD:         EQU   0x66 ; list of open files
+SDCSFGSIZEHDL:      EQU   0x68 ; get file size file handle
+SDCSFGSIZE:         EQU   0x6A ; file get size
 
 ; sdcard io commands start
 SDCMDRESET:          EQU   0x0f
@@ -151,6 +154,7 @@ SDCMDFWRITEB:        EQU   0x2A
 SDCMDFREADB:         EQU   0x2B
 SDCMDFTRUNCATE:      EQU   0x2C
 SDCMDLSOF:           EQU   0x2D
+SDCMDFGETSIZE:       EQU   0x2E
 
 ;
 ;
@@ -186,6 +190,7 @@ APIFWRITEB:          jp FWRITEBAPI
 APIFREADB:           jp FREADBAPI
 APIFTRUNCATE:        jp FTRUNCATEAPI
 APILSOF:             jp LSOFAPI
+APIFGETSIZE:         jp FGETSIZEAPI
 
 ; just info
 MAIN:        
@@ -1146,9 +1151,41 @@ MAIN_CHK29:
                                         
                     jp MAIN_END
 
+;call FGETSIZECLI
+MAIN_CHK30:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FGETSIZE
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK31
+
+                    ; ok same lenght
+                    ld hl, CMD_FGETSIZE
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK31
+
+                    ; prepare dispatch
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
+
+                    ; dispatch
+                    call FGETSIZECLI
+
+                    jp MAIN_END
 
 ; call FSAVECLI
-MAIN_CHK30:
+MAIN_CHK31:
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_SAVE
@@ -7851,6 +7888,331 @@ FTRUNCATEFH_OK:
 
                     ld a, 0x00
                     ret
+;--------------------------------------------------------
+;
+; Get file size - fgetsize (int *ofhld)
+;
+;--------------------------------------------------------
+;--------------------------------------------------------
+FGETSIZECLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call FGETSIZEFH
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, FGETSIZECLI_OK
+
+                    ; display error code
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                 
+
+FGETSIZECLI_OK:
+                    ;
+                    ; display file size
+                    ;
+
+                    ; read memory variable
+                    ld hl, OUT_LONG
+                    ld a, (hl)
+
+                    ; byte 4
+                    push hl
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl
+
+                    ; byte 3
+                    inc hl
+                    ld a, (hl)
+                    push hl 
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl
+
+                    ; byte 2
+                    inc hl
+                    ld a, (hl)
+                    push hl 
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl
+
+                    ; byte 1 (last)
+                    inc hl
+                    ld a, (hl)
+                    push hl
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl 
+
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; and ok end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+FGETSIZEAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+FGETSIZEFH:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,FGETSIZEFH_OK1
+
+; just info
+FGETSIZEFH_FAIL1:
+                    ret
+
+FGETSIZEFH_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start get file size
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDFGETSIZE   
+                    out   (SDCWC),a
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFGSIZEHDL
+                    jr   z,FGETSIZEFH_OK2
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+
+FGETSIZEFH_OK2:
+                    ; ready to send the
+                    ; hdl id of file to get pos
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_HDL
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                   
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is the send mode state?
+                    cp   SDCSFGSIZE
+                    jr   z, FGETSIZEFH_OK3  
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                  
+
+FGETSIZEFH_OK3:
+                    ; set variable top
+                    ; memory address
+                    ld hl, OUT_LONG
+                    inc hl
+                    inc hl
+                    inc hl
+
+FGETSIZEFH_LOOP:
+                    ; read pos byte from file
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get data
+                    in   a,(SDCRD)   
+                    
+                    ; store data in
+                    ; memory address
+                    ld (hl), a
+                    dec hl
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; are bytes available ?
+                    cp   SDCSFGSIZE
+                    jr   z, FGETSIZEFH_LOOP
+                    
+                    ;
+                    ; no more bytes for
+                    ; position in file
+                    ;
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; is in idle state ?
+                    cp   SDCSIDL
+                    jr   z, FGETSIZEFH_OK
+                    
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x04
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+
+FGETSIZEFH_OK:
+                    ;
+                    ; operation ok
+                    ;
+
+                    ld a, 0x00
+                    ret
 
 ;--------------------------------------------------------
 ;
@@ -8692,6 +9054,7 @@ CMD_FWRITEB:         DB      "FWRITEB",0
 CMD_FREADB:          DB      "FREADB",0
 CMD_FTRUNCATE:       DB      "FTRUNCATE",0
 CMD_LSOF:            DB      "LSOF",0
+CMD_FGETSIZE:        DB      "FGETSIZE",0
 
 ;
 ; RAM zone - variables

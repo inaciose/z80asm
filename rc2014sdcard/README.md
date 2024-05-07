@@ -25,7 +25,7 @@ if run from RAM
 
 Z80 exploration as SCM app 
 
-+ Commands 
+Commands   
 - load name hexaddr (load name HHHH)
 - save name hexaddr hexlen (save name HHHH HHHH)
 - del name
@@ -41,15 +41,16 @@ Z80 exploration as SCM app
 - reset
 - exit
 - cat
+- lsof (list open files)
 
-+ commands to add:
+Commands to add:  
 - help
 - format
 - volume (sd card info)
 
 # File management program API
-+ the commands above (cli exploration) are also to be part of the 
-+ commands (also available on SCM app (for testing)
+the commands above (cli exploration) are also to be part of the  
+commands (also available on SCM app (for testing)  
 - fopen name HHHH                             name openmode
 - fclose HH                                   handleid
 - fwrite HH HH (write byte)                   handleid byte
@@ -63,18 +64,19 @@ Z80 exploration as SCM app
 - frewind HH                                  handleid
 - fpeek HH                                    handleid
 - ftruncate HH HHHH HHHH                      handleid 	MSWORD LSWORD
-- lsof (list open files)
+- fgetsize HH                                 handleid
 
-+ commands to add:
+commands to add:  
 - bool 	isDir () const
 - bool 	isFile () const
 - int 	write (const char *str)
 - int16_t 	fgets (char *str, int16_t num, char *delim=0)
 - ??? bool 	isOpen () : (can be made with lsfo and getFilename ???)
 
-+ commands to add that requires changes in firmware:
+Commands to add that requires changes in firmware:  
 - uint32_t 	getFilename	( char *name)	
-- uint32_t 	fileSize () const
+- format
+- volume (sd card info)
 
 # Programer API - Interface for external program usage
 The developmente of API for interface with the programs is waiting for the development of the base I/O routines that is still a work in progress.
