@@ -59,6 +59,8 @@
 ; v1.06k - add lsof (firmware v1.06d)
 ; v1.06l - add getfsize (firmware v1.06e)
 ; v1.06m - add getfname (firmware v1.06f)
+; v1.06n - rewrite list (divided on list, slist & clist) (list is cli) 
+;          (slist & clist to be removed from cli)
 ;
 ;         
 ;
@@ -135,6 +137,7 @@ SDCMDLOAD:           EQU   0x0d
 SDCMDSAVE:           EQU   0x0c
 SDCMDRWEND:          EQU   0x0b
 SDCMDLIST:           EQU   0x0e
+SDCMDCLIST:          EQU   0x1e
 SDCMDDEL:            EQU   0x0a
 SDCMDREN:            EQU   0x10
 SDCMDCOPY:           EQU   0x11
@@ -170,7 +173,8 @@ CLIENTRY:            jr MAIN
 APIFSAVE:            jp FSAVEAPI
 APIFLOAD:            jp FLOADAPI
 APIFDEL:             jp FDELAPI
-APILIST:             jp STARTLSTF
+APISLIST:            jp SLISTAPI ; start DIR
+APICLIST:            jp CLISTAPI ; get each dir item
 APIFREN:             jp FRENAPI
 APIFCOPY:            jp FCOPYAPI
 APICHDIR:            jp CDAPI
@@ -281,7 +285,7 @@ MAIN:
 
                     ; dispatch
                     jp MAIN_END
-                    
+;call LISTCLI
 MAIN_CHK1:
                     ; test string lenghts
                     ; get 1st len
@@ -305,7 +309,7 @@ MAIN_CHK1:
                     jr nz, MAIN_CHK2
                     
                     ; dispatch
-                    call STARTLSTF
+                    call LISTCLI
                     
                     jp MAIN_END
 
@@ -1188,7 +1192,6 @@ MAIN_CHK30:
                     call FGETSIZECLI
 
                     jp MAIN_END
-
 ;call FGETNAMECLI
 MAIN_CHK31:
                     ; test string lenghts
@@ -1221,9 +1224,72 @@ MAIN_CHK31:
                     call FGETNAMECLI
 
                     jp MAIN_END
+;call SLISTCLI
+MAIN_CHK32:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_SLIST
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK33
+
+                    ; ok same lenght
+                    ld hl, CMD_SLIST
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK33
+                                        
+                    ld   de,CMD_SLIST
+                    ld   C,$06
+                    rst   $30
+
+                    ; dispatch
+                    call SLISTCLI
+                    
+                    jp MAIN_END
+
+;call CLISTCLI
+MAIN_CHK33:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_CLIST
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK34
+
+                    ; ok same lenght
+                    ld hl, CMD_CLIST
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK34
+                    
+                    ld   de,CMD_CLIST
+                    ld   C,$06
+                    rst   $30
+
+                    ; dispatch
+                    call CLISTCLI
+                    
+                    jp MAIN_END
 
 ; call FSAVECLI
-MAIN_CHK32:
+MAIN_CHK34:
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_SAVE
@@ -1632,61 +1698,74 @@ FDEL_OK:
                     
 ;--------------------------------------------------------
 ;
-; List files on SD
+; Start List files on SD proccess
 ;
 ;--------------------------------------------------------
-STARTLSTF:
-                    ;ld   de,STR_CMD_LIST
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-
-                    ; wait 1 ms before any
-                    ; in or out to SD card
-                    push hl
-                    ld  de, 1
-                    ld  c, $0a
-                    rst $30
-                    pop hl
-                    
-                    ; get status
-                    in   a,(SDCRS)   
-                    ; exit with error message if a != 0
-                    cp   SDCSIDL   
-                    jr   z,STARTLSTF_OK1 
-
-                    ; open file idle status is also acepted
-                    ; get status
-                    ;in   a,(SDCRS)   
-                    ; exit with error message if a != 0
-                    ;cp   SDCSFOIDL   
-                    ;jr   z,STARTLSTF_OK1 
-
-; just info
-STARTLSTF_FAIL1:
+SLISTCLI:
                     ;
-                    ; display error message
+                    ; entry point from cli
                     ;
-                    ; load string start address
+                    call SLISTFN
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, SLISTCLI_OK
+
+                    ; display error code
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display error end message
+                    ; using scm api
                     ld   de,STR_SDSTATUS_BAD
-                    ; load api id
                     ld   C,$06
-                    ; call api
                     rst   $30
-
-                    ; return
                     ret
 
-STARTLSTF_OK1:
+SLISTCLI_OK:
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; and ok end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+SLISTAPI:
                     ;
-                    ; display ok message
+                    ; entry point from api
                     ;
-                    ;ld   de,STR_SDSTATUS_OK
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+SLISTFN:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,SLISTFN_OK1
+
+; just info
+SLISTFN_FAIL1:
+                    ret
+
+SLISTFN_OK1:
                     
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -1701,16 +1780,6 @@ STARTLSTF_OK1:
                     ld   a,SDCMDLIST   
                     out   (SDCWC),a
                     
-                    ;
-                    ; display operation
-                    ;
-                    ; load string start address
-                    ;ld   de,STR_CHK_NAME
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
@@ -1722,37 +1791,23 @@ STARTLSTF_OK1:
                     in   a,(SDCRS)   
                     ; if status != 32 exit
                     cp   SDCSDIRFN
-                    jr   z,STARTLSTF_OK2
+                    jr   z,SLISTFN_OK2
 
-                    
-                    ;
-                    ; display error message
-                    ;
-                    ; load string start address
-                    ld   de,STR_SDSTATUS_BAD
-                    ; load api id
-                    ld   C,$06
-                    ; call api
-                    rst   $30
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
 
-                    ; return                    
-                    ret                     
+                    ret                    
 
-STARTLSTF_OK2:
+SLISTFN_OK2:
                     ;
                     ; ready to send the file name
                     ;
-                    ; display ok message
-                    ;
-                    ;ld   de,STR_SDSTATUS_OK
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-                    
-                    ;
-                    ; send the file name
-                    ;
+
                     push bc
                     push hl
                     ld   hl,FILE_NAME
@@ -1771,24 +1826,131 @@ STARTLSTF_OK2:
                     ; get status
                     in   a,(SDCRS)   
                     ; is list dir state ?
-                    cp   SDCSDIR
-                    jr   z, DIRLISTLOOP
+                    cp   SDCSIDL
+                    jr   z, SLISTFN_OK
                     
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+       
+SLISTFN_OK:
                     ;
-                    ; display error message
+                    ; directory ready to list
                     ;
-                    ; load string start address
-                    ld   de,STR_SDSTATUS_BAD
-                    ; load api id
-                    ld   C,$06
-                    ; call api
-                    rst   $30
-                    
-                    ; return
+                    ; need to get names
+                    ; file by file (or directory)
+                    ; with another routine
+
+                    ld a, 0x00
                     ret
 
+;--------------------------------------------------------
+;
+; List each file/dir name on directory (need call slist first)
+;
+;--------------------------------------------------------
+CLISTCLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call CLISTGI
 
-DIRLISTLOOP:
+                    ; check for operation result
+                    cp 0x00
+                    jr z, CLISTCLI_OK1
+
+                    ; display error code
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+CLISTCLI_OK1:
+
+                    ;
+                    ; display file name
+                    ;
+
+                    ; set base filename
+                    ; chars buffer address
+                    ld hl, OUTBUFFER
+
+                    ; load byte check zero for end
+                    ld a, (hl)
+                    cp 0x00
+                    jr z, CLISTCLI_OK
+
+CLISTCLI_LOOP:                    
+                    ; display char
+                    call OUTCHAR                
+
+                    ; next char
+                    inc hl
+
+                    ; load char check zero for end
+                    ld a, (hl)
+                    cp 0x00
+                    jr nz, CLISTCLI_LOOP
+
+                    ; is zero, filename end
+                    ; we are almost done
+
+CLISTCLI_OK:
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; and ok end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+CLISTAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+CLISTGI:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,CLISTGI_OK1
+
+; just info
+CLISTGI_FAIL1:
+                    ret
+
+CLISTGI_OK1:
+                    
                     ; wait 1 ms before any
                     ; in or out to SD card
                     push hl
@@ -1796,60 +1958,122 @@ DIRLISTLOOP:
                     ld  c, $0a
                     rst $30
                     pop hl
+
+                    ; start get an item from directory list
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDCLIST   
+                    out   (SDCWC),a
                     
-                    ; check if we have
-                    ; any byte available
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
 
                     ; get status
-                    in   a,(SDCRS)
-                    
-                    ; display status
-                    ;call OUTCHAR
-                    ;push af
-                    ; output nl & cr
-                    ;ld a, '\n'
-                    ;call OUTCHAR
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-                    ;pop af
-                    
-                    ; return if its not in dir list state
-                    cp   SDCSDIR                     
-  
-                    ; directory listed
-                    jr  nz, ENDDIR_OK
-                    
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSDIR
+                    jr   z,CLISTGI_OK2
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                    
+
+CLISTGI_OK2:
+                    ; read the filename
+                    ; chars to buffer
+
+                    ; set hl register to lsof 
+                    ; buffer start in memory
+                    ld hl, OUTBUFFER
+
+CLISTGI_LOOP:
                     ; wait 1 ms before any
                     ; in or out to SD card
-                    ;push bc
                     push hl
-                    ld  de, 1
-                    ld  c, $0a
-                    rst $30
-                    pop hl
-                    ;pop bc 
-                    
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
                     ; get data
                     in   a,(SDCRD)
-                    
-                    ; display char
-                    call OUTCHAR                    
-                    
-                    jr DIRLISTLOOP
-                      
-                    
-ENDDIR_OK:
-                    ; directory was listed
+
+                    ; dont store the new line
+                    cp '\n'
+                    jr z, CLISTGI_LOOPJ
+
+                    ; store data in memory
+                    ld (hl), a
+
+                    ; increment and
+                    ; set terminator
+                    inc hl
+
+CLISTGI_LOOPJ:                    
+                    ld (hl), 0x00
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSDIR
+                    jr   z, CLISTGI_LOOP
+
+                    ; 
+                    ; we are out of loop
+                    ; we expect idle status
                     ;
-                    ; display end message
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSIDL
+                    jr   z, CLISTGI_OK
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+
+CLISTGI_OK:
                     ;
-                    ld   de,STR_DIROK
-                    ; load api id
-                    ld   C,$06
-                    ; call api
-                    rst   $30
-                    
-                    ; return
+                    ; directory ready to list
+                    ;
+                    ; need to get names
+                    ; file by file (or directory)
+                    ; with another routine
+
+                    ld a, 0x00
                     ret
 
 ;--------------------------------------------------------
@@ -8761,6 +8985,183 @@ LSOF_OK:
 
 ;--------------------------------------------------------
 ;
+; List files in a directory on SD
+;
+;--------------------------------------------------------
+                    ;
+                    ; multi operation
+                    ; 1 - start list (slist)
+                    ; 2 - n times read list item (clist)
+                    ;
+;--------------------------------------------------------
+LISTCLI:     
+                    ;
+                    ; entry point from cli
+                    ;
+                    call LISTFN
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, LISTCLI_OK
+
+                    ; display error code
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ; separator
+                    ld a, ' '
+                    call OUTCHAR 
+
+                    ; read memory variable
+                    ; operation index in multi operations
+                    ld hl, TMP_BYTE2
+                    ld a, (hl)
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                 
+
+LISTCLI_OK:
+                    ; read memory variable
+                    ; hold file handle
+                    ;ld hl, TMP_BYTE
+                    ;ld a, (hl)
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+                                        ;
+                    ; display end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------  
+LISTFN:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,LISTFN_OK1
+; just info
+LISTFN_FAIL1:
+                    ret
+
+LISTFN_OK1:
+                    ;
+                    ; sdif status is ok to proceed
+                    ;
+                    ; we already have the name
+                    ; of the dir we want to 
+                    ; get the list of files/dirs
+                    ;
+
+                    ;
+                    ; call slist (start list process)
+                    ;
+
+                    ; signal that we are
+                    ; entering slist fname
+                    ld hl, TMP_BYTE2  
+                    ld (hl), 0x01
+
+                    ; call slist (not entering by api)
+                    call SLISTFN
+
+                    ; return if we have an error
+                    ; error is when a != 0 
+                    cp 0x00
+                    ret nz
+
+; just info
+LISTFN_OK2:
+                    ; signal that we are
+                    ; entering clist to get
+                    ; a directory item
+                    ld hl, TMP_BYTE2  
+                    ld (hl), 0x02
+
+LISTFN_LOOP:
+                    ; call cist (not entering by api)
+                    call CLISTGI
+
+                    ; check if its null
+                    ld hl, OUTBUFFER
+                    ld a, (hl)
+                    cp 0x00
+                    jr z, LISTFN_OK
+
+                    ; display file/dir name
+                    ;push hl
+                    ld de, OUTBUFFER
+                    ld   C,$06
+                    rst   $30
+                    ;pop hl
+
+                    ; we have an /n terminator
+                    ; need to put the /r
+                    ld a, '\n'
+                    call OUTCHAR
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; do until we have itens
+                    ; to list, OUTBUFFER[0] != 0
+                    jr LISTFN_LOOP
+
+LISTFN_OK:
+                    ;
+                    ; directory list done
+                    ;
+                    ; need to get names
+                    ; file by file (or directory)
+                    ; with another routine
+
+                    ld a, 0x00
+                    ret
+
+;--------------------------------------------------------
+;
 ; File cat - cat (int *strfname)
 ;
 ;--------------------------------------------------------
@@ -9380,6 +9781,8 @@ CMD_FTRUNCATE:       DB      "FTRUNCATE",0
 CMD_LSOF:            DB      "LSOF",0
 CMD_FGETSIZE:        DB      "FGETSIZE",0
 CMD_FGETNAME:        DB      "FGETNAME",0
+CMD_SLIST:            DB      "SLIST",0
+CMD_CLIST:            DB      "CLIST",0
 
 ;
 ; RAM zone - variables
