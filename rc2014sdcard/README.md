@@ -63,18 +63,18 @@ Z80 exploration as SCM app
 - frewind HH                                  handleid
 - fpeek HH                                    handleid
 - ftruncate HH HHHH HHHH                      handleid 	MSWORD LSWORD
+- lsof (list open files)
 
 + commands to add:
 - bool 	isDir () const
 - bool 	isFile () const
 - int 	write (const char *str)
 - int16_t 	fgets (char *str, int16_t num, char *delim=0)
+- ??? bool 	isOpen () : (can be made with lsfo and getFilename ???)
 
 + commands to add that requires changes in firmware:
+- uint32_t 	getFilename	( char *name)	
 - uint32_t 	fileSize () const
-- bool 	isOpen () const
-- bool 	isRoot () const
-- hdllist lsof()  (list openfiles)
 
 # Programer API - Interface for external program usage
 The developmente of API for interface with the programs is waiting for the development of the base I/O routines that is still a work in progress.

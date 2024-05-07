@@ -56,6 +56,7 @@
 ; v1.06h - add frwiteb (firmware v1.06b)
 ; v1.06i - add freadb & change frwiteb and frwite to wait for SDC on sync
 ; v1.06j - add ftruncate (firmware v1.06c )
+; v1.06k - add lsof (firmware v1.06d)
 ;
 ;         
 ;
@@ -120,6 +121,7 @@ SDCSFRBSTAT:        EQU   0x5E ; file readbytes status
 SDCSFTRCTHDL:       EQU   0x60 ; file truncate handle
 SDCSFTRUNCATE:      EQU   0x62 ; file truncate
 SDCSFTRCTSTAT:      EQU   0x64 ; file truncate status
+SDCSLSOFRD:         EQU   0x66 ; list of open files
 
 ; sdcard io commands start
 SDCMDRESET:          EQU   0x0f
@@ -148,6 +150,7 @@ SDCMDFPEEK:          EQU   0x29
 SDCMDFWRITEB:        EQU   0x2A
 SDCMDFREADB:         EQU   0x2B
 SDCMDFTRUNCATE:      EQU   0x2C
+SDCMDLSOF:           EQU   0x2D
 
 ;
 ;
@@ -182,6 +185,7 @@ APIFPEEK:            jp FPEEKAPI
 APIFWRITEB:          jp FWRITEBAPI
 APIFREADB:           jp FREADBAPI
 APIFTRUNCATE:        jp FTRUNCATEAPI
+APILSOF:             jp LSOFAPI
 
 ; just info
 MAIN:        
@@ -1114,9 +1118,37 @@ MAIN_CHK28:
                     call FTRUNCATECLI
 
                     jp MAIN_END
+;call LSOFCLI
+MAIN_CHK29:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_LSOF
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK30
+
+                    ; ok same lenght
+                    ld hl, CMD_LSOF
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK30
+                    
+                    ; dispatch
+                    call LSOFCLI
+                                        
+                    jp MAIN_END
+
 
 ; call FSAVECLI
-MAIN_CHK29:
+MAIN_CHK30:
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_SAVE
@@ -7820,6 +7852,226 @@ FTRUNCATEFH_OK:
                     ld a, 0x00
                     ret
 
+;--------------------------------------------------------
+;
+; Get open files list (lsof)
+;
+;--------------------------------------------------------
+;--------------------------------------------------------
+LSOFCLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call LSOF
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, LSOFCLI_OK1
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                 
+
+LSOFCLI_OK1:
+                    ;
+                    ; display result
+                    ;
+
+                    ; get handle if from
+                    ; memory buffer
+
+                    ld hl, OUTBUFFER
+                    
+                    ; load byte check zero for end
+                    ld a, (hl)
+                    cp 0x00
+                    jr z, LSOFCLI_NLOOP
+
+LSOFCLI_LOOP:                    
+                    push hl
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, ' '
+                    call OUTCHAR
+
+                    ; next byte
+                    pop hl
+                    inc hl
+
+                    ; load byte check zero for end
+                    ld a, (hl)
+                    cp 0x00
+                    jr nz, LSOFCLI_LOOP
+
+                    ; is zero, skip no loop
+                    jr LSOFCLI_OK
+
+LSOFCLI_NLOOP:
+                    ld a, '0'
+                    call OUTCHAR
+                    ld a, '0'
+                    call OUTCHAR
+
+LSOFCLI_OK:
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; and ok end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+LSOFAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+LSOF:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,LSOF_OK1 
+
+; just info
+LSOF_FAIL1:
+                    ret
+
+LSOF_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start read open file list
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDLSOF   
+                    out   (SDCWC),a
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSLSOFRD
+                    jr   z,LSOF_OK2
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret 
+
+LSOF_OK2:
+                    ; read the bytes to lsof buffer
+
+                    ; set hl register to lsof 
+                    ; buffer start in memory
+                    ld hl, OUTBUFFER
+
+LSOF_LOOP:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get data
+                    in   a,(SDCRD)   
+                    
+                    ; store data in memory
+                    ld (hl), a
+
+                    ; increment and
+                    ; set terminator
+                    inc hl
+                    ld (hl), 0x00
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSLSOFRD
+                    jr   z, LSOF_LOOP
+
+                    ; 
+                    ; we are out of loop
+                    ; we expect idle status
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSIDL
+                    jr   z, LSOF_OK
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret 
+LSOF_OK:
+                    ;
+                    ; operation ok
+                    ;
+
+                    ld a, 0x00
+                    ret
 
 ;--------------------------------------------------------
 ;
@@ -8439,6 +8691,7 @@ CMD_FCAT:            DB      "CAT",0
 CMD_FWRITEB:         DB      "FWRITEB",0
 CMD_FREADB:          DB      "FREADB",0
 CMD_FTRUNCATE:       DB      "FTRUNCATE",0
+CMD_LSOF:            DB      "LSOF",0
 
 ;
 ; RAM zone - variables
