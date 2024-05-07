@@ -59,8 +59,8 @@
 ; v1.06k - add lsof (firmware v1.06d)
 ; v1.06l - add getfsize (firmware v1.06e)
 ; v1.06m - add getfname (firmware v1.06f)
-; v1.06n - rewrite list (divided on list, slist & clist) (list is cli) 
-;          (slist & clist to be removed from cli)
+; v1.06n - rewrite list (firmware v1.06g), divided on list (cli), and slist & clist
+; v1.06o - cleanup, slist & clist removed from cli (firmware v1.06g)
 ;
 ;         
 ;
@@ -1224,72 +1224,9 @@ MAIN_CHK31:
                     call FGETNAMECLI
 
                     jp MAIN_END
-;call SLISTCLI
-MAIN_CHK32:
-                    ; test string lenghts
-                    ; get 1st len
-                    ld hl, CMD_SLIST
-                    call STRLEN
-                    ; store len in register e
-                    ld e, a
-                    ; get 2nd len
-                    ld hl, FILE_CMD
-                    call STRLEN
-                    ; compare it with len
-                    ; in register register e
-                    cp e
-                    jr nz, MAIN_CHK33
-
-                    ; ok same lenght
-                    ld hl, CMD_SLIST
-                    ld de, FILE_CMD
-                    
-                    call STRCMP
-                    jr nz, MAIN_CHK33
-                                        
-                    ld   de,CMD_SLIST
-                    ld   C,$06
-                    rst   $30
-
-                    ; dispatch
-                    call SLISTCLI
-                    
-                    jp MAIN_END
-
-;call CLISTCLI
-MAIN_CHK33:
-                    ; test string lenghts
-                    ; get 1st len
-                    ld hl, CMD_CLIST
-                    call STRLEN
-                    ; store len in register e
-                    ld e, a
-                    ; get 2nd len
-                    ld hl, FILE_CMD
-                    call STRLEN
-                    ; compare it with len
-                    ; in register register e
-                    cp e
-                    jr nz, MAIN_CHK34
-
-                    ; ok same lenght
-                    ld hl, CMD_CLIST
-                    ld de, FILE_CMD
-                    
-                    call STRCMP
-                    jr nz, MAIN_CHK34
-                    
-                    ld   de,CMD_CLIST
-                    ld   C,$06
-                    rst   $30
-
-                    ; dispatch
-                    call CLISTCLI
-                    
-                    jp MAIN_END
 
 ; call FSAVECLI
-MAIN_CHK34:
+MAIN_CHK32:
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_SAVE
@@ -1698,56 +1635,8 @@ FDEL_OK:
                     
 ;--------------------------------------------------------
 ;
-; Start List files on SD proccess
+; Start List files in a directory on SD proccess
 ;
-;--------------------------------------------------------
-SLISTCLI:
-                    ;
-                    ; entry point from cli
-                    ;
-                    call SLISTFN
-
-                    ; check for operation result
-                    cp 0x00
-                    jr z, SLISTCLI_OK
-
-                    ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
-
-                    ; display error end message
-                    ; using scm api
-                    ld   de,STR_SDSTATUS_BAD
-                    ld   C,$06
-                    rst   $30
-                    ret
-
-SLISTCLI_OK:
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
-
-                    ; and ok end message
-                    ; using scm api
-                    ld   de,STR_OK
-                    ld   C,$06
-                    rst   $30
-                    ret
-
-;--------------------------------------------------------
 ;--------------------------------------------------------
 SLISTAPI:
                     ;
@@ -1852,86 +1741,8 @@ SLISTFN_OK:
 
 ;--------------------------------------------------------
 ;
-; List each file/dir name on directory (need call slist first)
+; List each file/dir name on directory (need call slist first) (no cli)
 ;
-;--------------------------------------------------------
-CLISTCLI:
-                    ;
-                    ; entry point from cli
-                    ;
-                    call CLISTGI
-
-                    ; check for operation result
-                    cp 0x00
-                    jr z, CLISTCLI_OK1
-
-                    ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
-
-                    ; display error end message
-                    ; using scm api
-                    ld   de,STR_SDSTATUS_BAD
-                    ld   C,$06
-                    rst   $30
-                    ret
-
-CLISTCLI_OK1:
-
-                    ;
-                    ; display file name
-                    ;
-
-                    ; set base filename
-                    ; chars buffer address
-                    ld hl, OUTBUFFER
-
-                    ; load byte check zero for end
-                    ld a, (hl)
-                    cp 0x00
-                    jr z, CLISTCLI_OK
-
-CLISTCLI_LOOP:                    
-                    ; display char
-                    call OUTCHAR                
-
-                    ; next char
-                    inc hl
-
-                    ; load char check zero for end
-                    ld a, (hl)
-                    cp 0x00
-                    jr nz, CLISTCLI_LOOP
-
-                    ; is zero, filename end
-                    ; we are almost done
-
-CLISTCLI_OK:
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
-
-                    ; and ok end message
-                    ; using scm api
-                    ld   de,STR_OK
-                    ld   C,$06
-                    rst   $30
-                    ret
-
-;--------------------------------------------------------
 ;--------------------------------------------------------
 CLISTAPI:
                     ;
@@ -9539,7 +9350,6 @@ STRLEN01:
 
 ;--------------------------------------------
 
-
 STRCMP:
             ; input: hl address string1
             ;        de address string2
@@ -9559,7 +9369,6 @@ STRCMP:
             JR      STRCMP 
 
 ;--------------------------------------------
-
 
 CONVERTTOUPPER:      
                     PUSH    hl 
@@ -9584,7 +9393,6 @@ CONVERTTOUPPER03:
                     RET   
 
 ;--------------------------------------------
-
 
 ISSTRHEX:            
             PUSH    hl 
@@ -9781,8 +9589,6 @@ CMD_FTRUNCATE:       DB      "FTRUNCATE",0
 CMD_LSOF:            DB      "LSOF",0
 CMD_FGETSIZE:        DB      "FGETSIZE",0
 CMD_FGETNAME:        DB      "FGETNAME",0
-CMD_SLIST:            DB      "SLIST",0
-CMD_CLIST:            DB      "CLIST",0
 
 ;
 ; RAM zone - variables
