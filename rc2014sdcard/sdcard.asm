@@ -58,6 +58,7 @@
 ; v1.06j - add ftruncate (firmware v1.06c )
 ; v1.06k - add lsof (firmware v1.06d)
 ; v1.06l - add getfsize (firmware v1.06e)
+; v1.06m - add getfname (firmware v1.06f)
 ;
 ;         
 ;
@@ -124,7 +125,9 @@ SDCSFTRUNCATE:      EQU   0x62 ; file truncate
 SDCSFTRCTSTAT:      EQU   0x64 ; file truncate status
 SDCSLSOFRD:         EQU   0x66 ; list of open files
 SDCSFGSIZEHDL:      EQU   0x68 ; get file size file handle
-SDCSFGSIZE:         EQU   0x6A ; file get size
+SDCSFGSIZE:         EQU   0x6A ; get file size
+SDCSFGNAMEHDL:      EQU   0x6C ; get file name file handle
+SDCSFGNAME:         EQU   0x6E ; get file name
 
 ; sdcard io commands start
 SDCMDRESET:          EQU   0x0f
@@ -155,6 +158,7 @@ SDCMDFREADB:         EQU   0x2B
 SDCMDFTRUNCATE:      EQU   0x2C
 SDCMDLSOF:           EQU   0x2D
 SDCMDFGETSIZE:       EQU   0x2E
+SDCMDFGETNAME:       EQU   0x2F
 
 ;
 ;
@@ -191,6 +195,7 @@ APIFREADB:           jp FREADBAPI
 APIFTRUNCATE:        jp FTRUNCATEAPI
 APILSOF:             jp LSOFAPI
 APIFGETSIZE:         jp FGETSIZEAPI
+APIFGETNAME:         jp FGETNAMEAPI
 
 ; just info
 MAIN:        
@@ -1184,8 +1189,41 @@ MAIN_CHK30:
 
                     jp MAIN_END
 
-; call FSAVECLI
+;call FGETNAMECLI
 MAIN_CHK31:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_FGETNAME
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK32
+
+                    ; ok same lenght
+                    ld hl, CMD_FGETNAME
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK32
+
+                    ; prepare dispatch
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_HDL
+                    call FNAME2FHDL
+
+                    ; dispatch
+                    call FGETNAMECLI
+
+                    jp MAIN_END
+
+; call FSAVECLI
+MAIN_CHK32:
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_SAVE
@@ -8216,6 +8254,292 @@ FGETSIZEFH_OK:
 
 ;--------------------------------------------------------
 ;
+; Get file name - fgetname (int *ofhld)
+;
+;--------------------------------------------------------
+;--------------------------------------------------------
+FGETNAMECLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call FGETNAMEFH
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, FGETNAMECLI_OK1
+
+                    ; display error code
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                 
+
+FGETNAMECLI_OK1:
+                    ;
+                    ; display file name
+                    ;
+
+                    ; set base filename
+                    ; chars buffer address
+                    ld hl, OUTBUFFER
+
+                    ; load byte check zero for end
+                    ld a, (hl)
+                    cp 0x00
+                    jr z, FGETNAMECLI_OK
+
+FGETNAMECLI_LOOP:                    
+                    ; display char
+                    call OUTCHAR                
+
+                    ; next char
+                    inc hl
+
+                    ; load char check zero for end
+                    ld a, (hl)
+                    cp 0x00
+                    jr nz, FGETNAMECLI_LOOP
+
+                    ; is zero, filename end
+                    ; we are almost done
+
+FGETNAMECLI_OK:
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; and ok end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+FGETNAMEAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+FGETNAMEFH:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,FGETNAMEFH_OK1
+
+; just info
+FGETNAMEFH_FAIL1:
+                    ret
+
+FGETNAMEFH_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start get file size
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDFGETNAME   
+                    out   (SDCWC),a
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFGNAMEHDL
+                    jr   z,FGETNAMEFH_OK2
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+
+FGETNAMEFH_OK2:
+                    ; ready to send the
+                    ; hdl id of file to get pos
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; send HB
+                    push hl
+                    push af
+                    ld   hl,FILE_HDL
+                    ld   a, (hl)
+
+                    ;push af
+
+                    ; convert to hex
+                    ;call NUM2HEX;
+
+                    ; display hex
+                    ;ld a, d
+                    ;call OUTCHAR 
+                    ;ld a, e
+                    ;call OUTCHAR 
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;pop af
+
+                    out (SDCWD),a
+
+                    pop  af
+                    pop  hl
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+                   
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; is the send mode state?
+                    cp   SDCSFGNAME
+                    jr   z, FGETNAMEFH_OK3  
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret                  
+
+FGETNAMEFH_OK3:
+                    ; read the filename
+                    ; chars to buffer
+
+                    ; set hl register to lsof 
+                    ; buffer start in memory
+                    ld hl, OUTBUFFER
+
+FGETNAME_LOOP:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get data
+                    in   a,(SDCRD)   
+                    
+                    ; store data in memory
+                    ld (hl), a
+
+                    ; increment and
+                    ; set terminator
+                    inc hl
+                    ld (hl), 0x00
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFGNAME
+                    jr   z, FGETNAME_LOOP
+
+                    ; 
+                    ; we are out of loop
+                    ; we expect idle status
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSIDL
+                    jr   z, FGETNAME_OK
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x03
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret 
+
+FGETNAME_OK:
+                    ;
+                    ; operation ok
+                    ;
+
+                    ld a, 0x00
+                    ret
+
+;--------------------------------------------------------
+;
 ; Get open files list (lsof)
 ;
 ;--------------------------------------------------------
@@ -9055,6 +9379,7 @@ CMD_FREADB:          DB      "FREADB",0
 CMD_FTRUNCATE:       DB      "FTRUNCATE",0
 CMD_LSOF:            DB      "LSOF",0
 CMD_FGETSIZE:        DB      "FGETSIZE",0
+CMD_FGETNAME:        DB      "FGETNAME",0
 
 ;
 ; RAM zone - variables

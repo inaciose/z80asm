@@ -65,6 +65,7 @@ commands (also available on SCM app (for testing)
 - fpeek HH                                    handleid
 - ftruncate HH HHHH HHHH                      handleid 	MSWORD LSWORD
 - fgetsize HH                                 handleid
+- fgetname HH                                 handleid
 
 commands to add:  
 - bool 	isDir () const
@@ -73,8 +74,7 @@ commands to add:
 - int16_t 	fgets (char *str, int16_t num, char *delim=0)
 - ??? bool 	isOpen () : (can be made with lsfo and getFilename ???)
 
-Commands to add that requires changes in firmware:  
-- uint32_t 	getFilename	( char *name)	
+Commands to add that requires changes in firmware:  	
 - format
 - volume (sd card info)
 
