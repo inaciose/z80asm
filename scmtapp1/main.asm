@@ -1,4 +1,4 @@
-            org $8500
+            org $8000
             ld	de, text	; load address for text to display.
             call	display		; call display
             ret			; we are done
