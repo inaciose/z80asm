@@ -1,7 +1,11 @@
-bmsasic.bin: SCMon_BASIC.asm
-	z80asm SCMon_BASIC.asm -o SCMon_BASIC.bin --list=SCMon_BASIC.lst
+#SRCF = msbasic_grants.asm
+SRCF = msbasic_original.asm
+#SRCF = test.asm
 
-	srec_cat SCMon_BASIC.bin -binary -offset 0x8500 -output SCMon_BASIC.hex -intel -address-length=2
+msbasic.bin:
+	z80asm $(SRCF) -o msbasic.bin --list=msbasic.lst
+
+	srec_cat msbasic.bin -binary -offset 0x8000 -output msbasic.hex -intel -address-length=2
 
 clean:
-	rm -f SCMon_BASIC.bin SCMon_BASIC.lst SCMon_BASIC.hex
+	rm -f *.bin *.lst *.hex

@@ -15,3 +15,6 @@ The intel hexfile of this version is here for my own comodity (for copy paste in
 
 The Searle Grant sources are also availabe at:
 - http://searle.x10host.com/z80/sbc_NascomBasic32k.zip
+
+
+THIS DOES NOT COMPILE
