@@ -83,6 +83,8 @@ STACK:          EQU     0DA00H
 ;OCSW:           EQU     00800H          ;SWITCH FOR OUTPUT
 ; XSI REPLACED BY LINE
 OCSW:           EQU     0A000H          ;SWITCH FOR OUTPUT
+; replaced only to be tested
+;OCSW:           EQU     0B000H          ;SWITCH FOR OUTPUT
 CURRNT:         EQU     OCSW+1          ;POINTS FOR OUTPUT
 STKGOS:         EQU     OCSW+3          ;SAVES SP IN 'GOSUB'
 VARNXT:         EQU     OCSW+5          ;TEMP STORAGE
@@ -99,7 +101,8 @@ TXTBGN:         EQU     OCSW+23         ;TEXT SAVE AREA BEGINS
 ;TXTEND:         EQU     00F00H          ;TEXT SAVE AREA ENDS
 ; XSI REPLACED BY LINE
 TXTEND:         EQU     0AF00H          ;TEXT SAVE AREA ENDS
-
+; replaced only to be tested
+;TXTEND:         EQU     0BF00H          ;TEXT SAVE AREA ENDS
 
 ;*************************************************************
 ; *** ZERO PAGE SUBROUTINES ***
@@ -126,7 +129,10 @@ DWA:    MACRO WHERE
 
         ;ORG  0000H
         ; XSI REPLACED BY LINE
-        ORG  8500H
+        ;ORG  8500H
+        ;ORG  9000H
+        ;ORG  0A000H
+        ORG  8000H
 
 START:
         ; XSI SAVE SP
