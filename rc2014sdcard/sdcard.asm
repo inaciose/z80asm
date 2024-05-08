@@ -64,7 +64,7 @@
 ; v1.06p - add setorg, to set origin to load and run programs in only the program name
 ;          add run command on sdcard, filename must end with .com or .exe
 ;          (firmware v1.06g)
-;         
+; v1.06q - minor fixes, changes & minor save space (firmware v1.06g)     
 ;
 ;                    ORG   $8000   
                     ORG   $2000
@@ -1804,6 +1804,12 @@ COMEXE_NOTFOUND:
                     ld   de,STR_CMD_NOTFOUND
                     ld   C,$06
                     rst   $30
+
+                    ; output nl & cr
+                    ld a, '\n'
+                    call OUTCHAR
+                    ld a, '\r'
+                    call OUTCHAR                    
 
                     ; not an error
                     ld a, 0x00
@@ -9895,14 +9901,14 @@ DELAYDE:
                     ; asmz80.com to z80asm
                     ;ORG    $8350
 ROMDATA:
-STR_ZTGSDC:          DB      "ZeTuGa80 SD CARD\n\r",0
+STR_ZTGSDC:          DB      "ZeTuGa80 SDc\n\r",0
 STR_OK:              DB      "OK\n\r",0
 STR_ERROR:           DB      "ERROR\n\r",0
 
-STR_CMD:             DB      "CMD: ",0
-STR_CMD_NOTFOUND:    DB      "Command not found: ",0
+STR_CMD:             DB      ">",0
+STR_CMD_NOTFOUND:    DB      "Command not found",0
 
-STR_SDSTATUS_BAD:    DB      "Error: bad SD card if status\n\r",0
+STR_SDSTATUS_BAD:    DB      "Error: bad SDcIf status\n\r",0
 ;STR_SDSTATUS_OK:    DB      "OK: SD card if status is good\n\r",0
 
 STR_LOADOK:          DB      "File loaded\n\r",0
@@ -9912,12 +9918,12 @@ STR_REMOK:           DB      "File removed\n\r",0
 STR_RENOK:           DB      "File renamed\n\r",0
 STR_COPYOK:          DB      "File copied\n\r",0
 STR_EXISTOK:         DB      "File verified\n\r",0
-STR_MKDIROK:         DB      "Directory created\n\r",0
-STR_RMDIROK:         DB      "Directory removed\n\r",0
-STR_CHDIROK:         DB      "Directory changed\n\r",0
-STR_CWDOK:           DB      "Current directory\n\r",0
-STR_RESETOK:         DB      "SD card iff reset\n\r",0
-STR_SDIFSOK:         DB      "SD card iff status\n\r",0
+STR_MKDIROK:         DB      "Dir created\n\r",0
+STR_RMDIROK:         DB      "Dir removed\n\r",0
+STR_CHDIROK:         DB      "Dir changed\n\r",0
+STR_CWDOK:           DB      "Current dir\n\r",0
+STR_RESETOK:         DB      "SDcIf reset\n\r",0
+STR_SDIFSOK:         DB      "SDcIf status\n\r",0
 
 STR_COM:             DB      ".COM",0
 STR_EXE:             DB      ".EXE",0
@@ -9944,7 +9950,7 @@ CMD_FOPEN:           DB      "FOPEN",0
 CMD_FCLOSE:          DB      "FCLOSE",0
 CMD_FWRITE:          DB      "FWRITE",0
 CMD_FREAD:           DB      "FREAD",0
-CMD_FGETPOS:         DB      "FGETPOS",0 ;FTELL
+CMD_FGETPOS:         DB      "FTELL",0 ;FGETPOS
 CMD_FSEEKSET:        DB      "FSEEKSET",0
 CMD_FSEEKCUR:        DB      "FSEEKCUR",0
 CMD_FSEEKEND:        DB      "FSEEKEND",0
