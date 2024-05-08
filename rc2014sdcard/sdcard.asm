@@ -61,7 +61,9 @@
 ; v1.06m - add getfname (firmware v1.06f)
 ; v1.06n - rewrite list (firmware v1.06g), divided on list (cli), and slist & clist
 ; v1.06o - cleanup, slist & clist removed from cli (firmware v1.06g)
-;
+; v1.06p - add setorg, to set origin to load and run programs in only the program name
+;          add run command on sdcard, filename must end with .com or .exe
+;          (firmware v1.06g)
 ;         
 ;
 ;                    ORG   $8000   
@@ -203,6 +205,17 @@ APIFGETNAME:         jp FGETNAMEAPI
 
 ; just info
 MAIN:        
+                    ;
+                    ; set memory vars
+                    ; 
+        
+                    ; set org for programs
+                    ld hl, CLI_ORG
+                    ld (hl), 0x80
+                    inc hl
+                    ld (hl), 0x00
+
+MAIN_LOOP:
                     ; display start message
                     ; call api: print str
                     ld   de,STR_ZTGSDC
@@ -1239,20 +1252,84 @@ MAIN_CHK32:
                     ; compare it with len
                     ; in register register e
                     cp e
-                    jr nz, MAIN_END
+                    jr nz, MAIN_CHK33
 
                     ; ok same lenght
                     ld hl, CMD_SAVE
                     ld de, FILE_CMD
                     
                     call STRCMP
-                    jr nz, MAIN_END
+                    jr nz, MAIN_CHK33
                     
                     ; dispatch
                     call FSAVECLI
 
+                    jp MAIN_END
+
+;SETORGCLI
+MAIN_CHK33:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_SETORG
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK34
+
+                    ; ok same lenght
+                    ld hl, CMD_SETORG
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK34
+
+                    ; prepare address
+                    ; to set for org
+                    call FNAME2WORD
+
+                    ; copy it to memory
+                    ; variable CLI_ORG
+                    ld hl, TMP_WORD
+                    ld de, CLI_ORG
+
+                    ld a, (hl)
+                    ld (de), a
+
+                    inc hl
+                    inc de
+
+                    ld a, (hl)
+                    ld (de), a
+
+                    ; dispatch
+                    ;call SETORGCLI
+
+                    ; 
+                    ; ok message
+                    ; 
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+
+                    jp MAIN_END
+
+;
+MAIN_CHK34:
+                    ;
+                    ; try to run cmd.com
+                    ; 
+                    
+                    ; dispatch
+                    call COMEXECLI
+
 MAIN_END:
-                    jp MAIN
+                    jp MAIN_LOOP
 
 MAIN_RETURN:
                     ret
@@ -1277,6 +1354,36 @@ FNAME2FHDL:
                     ;
                     call CLI_HEX2TBIN1
                     ld de, FILE_HDL
+                    inc de
+                    ld (de), a                   
+                    ;
+                    pop de
+                    pop hl
+
+                    ret
+
+;--------------------------------------------------------
+;
+; main helper - FILE_NAME to Word (2 byes)
+;
+;--------------------------------------------------------
+FNAME2WORD:
+                    ; convert the FILE_NAME field
+                    ; to numeric bin at FILE_HDL
+                    push hl
+                    push de
+                    ;
+                    ld hl,FILE_NAME
+                    call CONVERTTOUPPER
+
+                    ; MSB first (not little endian)
+                    call CLI_HEX2TBIN1
+                    ld de, TMP_WORD
+                    ld (de), a
+
+                    ; LSB second
+                    call CLI_HEX2TBIN1
+                    ld de, TMP_WORD
                     inc de
                     ld (de), a                   
                     ;
@@ -1501,6 +1608,231 @@ GOT_OKHEX:
                     ld a, 1
                     call HEX2NUM
                     ret
+
+;--------------------------------------------------------
+;
+; try to run command from a file on root directory of SD
+;
+;--------------------------------------------------------
+;--------------------------------------------------------
+COMEXECLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call COMEXE
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, COMEXECLI_OK
+
+                    ; display error end message
+                    ; using scm api
+                    ;ld   de,STR_SDSTATUS_BAD
+                    ;ld   C,$06
+                    ;rst   $30
+                    ret                 
+
+COMEXECLI_OK:
+                    ; display ok end message
+                    ; using scm api
+                    ;ld   de,STR_OK
+                    ;ld   C,$06
+                    ;rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+COMEXEAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+
+COMEXE:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,COMEXE_OK1
+
+; just info
+COMEXE_FAIL1:
+                    ret
+
+COMEXE_OK1:
+                    ;
+                    ; make a copy of FILE_CMD
+                    ; to FILE_NAME
+                    ;
+                    ld hl, FILE_CMD
+                    ld de, FILE_NAME                      
+                    call STRCPY
+
+                    ; debug
+                    ;ld   de,FILE_CMD
+                    ;ld   C,$06
+                    ;rst   $30
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;
+                    ; try fname.com
+                    ; add .com to string
+                    ;
+                    ld hl, STR_COM
+                    ld de, FILE_NAME
+                    call STRCAT
+
+                    ; debug
+                    ;ld   de,FILE_NAME
+                    ;ld   C,$06
+                    ;rst   $30
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;
+                    ; check if com file exists
+                    ;
+                    call FEXISTFN
+
+                    ; read memory variable
+                    ; with output of FEXISTFN
+                    ld hl, OUT_BYTE
+                    ld a, (hl)
+
+                    ; check if exists
+                    ; and is a file
+                    cp 0x01              
+                    jr z, COMEXE_OK2
+                    
+                    ;
+                    ; it is not a .com file
+                    ; lets try an exe file  
+                    ;
+
+                    ; make a copy of FILE_CMD
+                    ; to FILE_NAME
+                    ld hl, FILE_CMD
+                    ld de, FILE_NAME                      
+                    call STRCPY
+
+                    ; add .exe to string
+                    ld hl, STR_EXE
+                    ld de, FILE_NAME
+                    call STRCAT
+
+                    ; debug
+                    ;ld   de,FILE_NAME
+                    ;ld   C,$06
+                    ;rst   $30
+
+                    ;ld a, '\n'
+                    ;call OUTCHAR 
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+
+                    ;
+                    ; check if com file exists
+                    ;
+                    call FEXISTFN
+
+                    ; read memory variable
+                    ; with output of FEXISTFN
+                    ld hl, OUT_BYTE
+                    ld a, (hl)
+
+                    ; check if exists
+                    ; and is a file
+                    cp 0x01              
+                    jr z, COMEXE_OK2
+
+                    ;
+                    ; it is not a .com file
+                    ; nor a .ex file 
+                    ;
+                    jr COMEXE_NOTFOUND
+
+
+COMEXE_OK2:
+                    ;
+                    ; is .com or .exe file
+                    ;        
+
+                    ;
+                    ; prepare arguments
+                    ; to call LOAD
+                    ; 
+
+                    ; we have the FILE_NAME
+                    ; copy variable CLI_ORG
+                    ; to FILE_START
+                    ld hl, CLI_ORG
+                    ld de, FILE_START
+
+                    ld a, (hl)
+                    ld (de), a
+
+                    inc hl
+                    inc de
+
+                    ld a, (hl)
+                    ld (de), a
+
+                    ; load the file program
+                    call FLOADFN
+
+                    ; check for operation result
+                    ; return erro if not ok (0x00)
+                    cp 0x00
+                    jr z, COMEXE_OK
+
+                    ; it have and error
+                    ; return
+                    ret
+
+COMEXE_NOTFOUND:
+                    ;
+                    ; show command not found
+                    ; message and return
+                    ; 
+                    ld   de,STR_CMD_NOTFOUND
+                    ld   C,$06
+                    rst   $30
+
+                    ; not an error
+                    ld a, 0x00
+
+                    ret
+COMEXE_OK:
+                    ;
+                    ; run program
+                    ;
+                    
+
+                    ld de, CLI_ORG
+                    ld a, (de);
+                    ld h, a
+                    inc de
+                    ld a,(de);
+                    ld l, a
+
+                    ;call (hl)
+
+                    jp (hl)
+
+                    ;
+                    ; end
+                    ;
+
+                    ld a, 0x00
+                    ret
+
 
 ;--------------------------------------------------------
 ;
@@ -8883,7 +9215,7 @@ LISTCLI_OK:
                                         ;
                     ; display end message
                     ; using scm api
-                    ld   de,STR_OK
+                    ld   de,STR_DIROK
                     ld   C,$06
                     rst   $30
                     ret
@@ -9370,6 +9702,49 @@ STRCMP:
 
 ;--------------------------------------------
 
+STRCPY:
+                ;input: HL = base address of string you wish to copy
+                ;       DE = where you want to copy it to.
+                ;       The string must be null-terminated, 
+
+                ld a,(hl)
+                or a        ;compare A to 0.
+                ;ret z
+                jr z, STRCPYEND
+                ld (de),a
+                inc hl
+                inc de
+                jr STRCPY
+
+STRCPYEND:
+                ; end string
+                ld (de),a
+                ret
+
+;--------------------------------------------
+
+STRCAT:
+                ;input: HL = base address of string you wish to copy
+                ;       DE = where you want to copy it to.
+                ;       The string must be null-terminated,
+
+                ; find the end of destination
+                ld a,(de)
+                or a        ;compare A to 0.
+                jr z, STRCAT1
+                inc de
+                jr STRCAT
+
+STRCAT1:
+                ; whe are at the end
+                ; of destination string
+                ; add the string in hl
+                call STRCPY
+
+                ret
+
+;--------------------------------------------
+
 CONVERTTOUPPER:      
                     PUSH    hl 
 CONVERTTOUPPER00:    
@@ -9520,39 +9895,32 @@ DELAYDE:
                     ; asmz80.com to z80asm
                     ;ORG    $8350
 ROMDATA:
-STR_ZTGSDC:         DB      "ZeTuGa80 SD CARD\n\r",0
-STR_OK:             DB      "OK\n\r",0
-STR_ERROR:          DB      "ERROR\n\r",0
+STR_ZTGSDC:          DB      "ZeTuGa80 SD CARD\n\r",0
+STR_OK:              DB      "OK\n\r",0
+STR_ERROR:           DB      "ERROR\n\r",0
 
 STR_CMD:             DB      "CMD: ",0
-;STR_CMD_LOAD        DB      "LOAD: ",0
-;STR_CMD_SAVE        DB      "SAVE: ",0
-;STR_CMD_DEL         DB      "DEL: ",0
-;STR_CMD_LIST        DB      "LIST",0
+STR_CMD_NOTFOUND:    DB      "Command not found: ",0
 
-;STR_LOAD:           DB      "Loading: ",0
-;STR_SAVE:           DB      "Saving: ",0
-
-STR_SDSTATUS_BAD:   DB      "Error: bad SD card if status\n\r",0
+STR_SDSTATUS_BAD:    DB      "Error: bad SD card if status\n\r",0
 ;STR_SDSTATUS_OK:    DB      "OK: SD card if status is good\n\r",0
 
-;STR_CHK_IDLE:       DB      "Check for idle state\n\r",0
-;STR_CHK_NAME:       DB      "Check for name state\n\r",0
-;STR_CHK_FILE:       DB      "Check for file state\n\r",0
-
-STR_LOADOK:         DB      "File loaded\n\r",0
-STR_SAVEOK:         DB      "File saved\n\r",0
-STR_DIROK:          DB      "List end!\n\r",0
-STR_REMOK:          DB      "File removed\n\r",0
-STR_RENOK:          DB      "File renamed\n\r",0
+STR_LOADOK:          DB      "File loaded\n\r",0
+STR_SAVEOK:          DB      "File saved\n\r",0
+STR_DIROK:           DB      "List end!\n\r",0
+STR_REMOK:           DB      "File removed\n\r",0
+STR_RENOK:           DB      "File renamed\n\r",0
 STR_COPYOK:          DB      "File copied\n\r",0
-STR_EXISTOK:          DB      "File verified\n\r",0
-STR_MKDIROK:          DB      "Directory created\n\r",0
-STR_RMDIROK:          DB      "Directory removed\n\r",0
-STR_CHDIROK:          DB      "Directory changed\n\r",0
-STR_CWDOK:            DB      "Current directory\n\r",0
-STR_RESETOK:          DB      "SD card iff reset\n\r",0
-STR_SDIFSOK:          DB      "SD card iff status\n\r",0
+STR_EXISTOK:         DB      "File verified\n\r",0
+STR_MKDIROK:         DB      "Directory created\n\r",0
+STR_RMDIROK:         DB      "Directory removed\n\r",0
+STR_CHDIROK:         DB      "Directory changed\n\r",0
+STR_CWDOK:           DB      "Current directory\n\r",0
+STR_RESETOK:         DB      "SD card iff reset\n\r",0
+STR_SDIFSOK:         DB      "SD card iff status\n\r",0
+
+STR_COM:             DB      ".COM",0
+STR_EXE:             DB      ".EXE",0
 
 ;
 ; command list
@@ -9589,6 +9957,7 @@ CMD_FTRUNCATE:       DB      "FTRUNCATE",0
 CMD_LSOF:            DB      "LSOF",0
 CMD_FGETSIZE:        DB      "FGETSIZE",0
 CMD_FGETNAME:        DB      "FGETNAME",0
+CMD_SETORG:          DB      "SETORG",0
 
 ;
 ; RAM zone - variables
@@ -9606,7 +9975,7 @@ FILE_LEN:           DS $02 ; 2 bytes
 FILE_NAME:          DS $41 ; 65 bytes
 FILE_NAME1:         DS $41 ; 65 bytes
 FILE_OMODE:         DS $02 ; 2 bytes
-FILE_HDL:           DS $02 ; 2 bytes
+FILE_HDL:           DS $02 ; 2 bytes (but for hdl only first is used)
 
 ; reserved
 BYTES_RESERVED:     DS $0F ; 15 bytes
@@ -9625,6 +9994,7 @@ CLI_ORG:            DS $02
 TMP_BYTE:           DS $01 ; 1 byte: File handle id
 ;TMP_BYTE1:          DS $01 ; 1 byte: 
 TMP_BYTE2:          DS $01 ; 1 byte: multi operation stage (operation that call others)
+TMP_WORD:           DS $02 ; 2 bytes
 
 ; cli input
 LINETMP:            DS $41 ; 65 bytes

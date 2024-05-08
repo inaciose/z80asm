@@ -42,6 +42,7 @@ Commands
 - exit
 - cat
 - lsof (list open files)
+- run *.com and *.exe files by name (without extension)
 
 Commands to add:  
 - help
