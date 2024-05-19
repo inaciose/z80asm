@@ -8927,6 +8927,22 @@ LSOFCLI:
                     cp 0x00
                     jr z, LSOFCLI_OK1
 
+                    ; display error code
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
                     ; display error end message
                     ; using scm api
                     ld   de,STR_SDSTATUS_BAD
@@ -9980,7 +9996,7 @@ FILE_START:         DS $02 ; 2 bytes : memory start address / file open mode
 FILE_LEN:           DS $02 ; 2 bytes
 FILE_NAME:          DS $41 ; 65 bytes
 FILE_NAME1:         DS $41 ; 65 bytes
-FILE_OMODE:         DS $02 ; 2 bytes
+FILE_OMODE:         DS $02 ; 2 bytes : NOT USED
 FILE_HDL:           DS $02 ; 2 bytes (but for hdl only first is used)
 
 ; reserved
