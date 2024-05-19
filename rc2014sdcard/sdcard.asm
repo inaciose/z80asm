@@ -64,8 +64,12 @@
 ; v1.06p - add setorg, to set origin to load and run programs in only the program name
 ;          add run command on sdcard, filename must end with .com or .exe
 ;          (firmware v1.06g)
-; v1.06q - minor fixes, changes & minor save space (firmware v1.06g)     
+; v1.06q - minor fixes, changes & minor save space (firmware v1.06g)
+; v1.06r - Added conditional assembler for cli low level file operations (firmware v1.06g)     
 ;
+
+DEBUG:            EQU   0x01
+
 ;                    ORG   $8000   
                     ORG   $2000
 
@@ -285,7 +289,6 @@ MAIN_LOOP:
                     ; hl have the command
                     ; de have the input to be tested
                     
-
                     ; dummy check to handle 
                     ; return key only
                     ; the '/0' on FILE_CMD
@@ -674,6 +677,8 @@ MAIN_CHK14:
 
 ;call FOPENCLI
 MAIN_CHK15:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FOPEN
@@ -700,8 +705,12 @@ MAIN_CHK15:
 
                     jp MAIN_END
 
+                ENDIF
+
 ;call FCLOSECLI
 MAIN_CHK16:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FCLOSE
@@ -733,8 +742,12 @@ MAIN_CHK16:
 
                     jp MAIN_END
 
+                ENDIF
+
 ;call FWRITECLI
 MAIN_CHK17:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FWRITE
@@ -766,8 +779,12 @@ MAIN_CHK17:
 
                     jp MAIN_END
 
+                ENDIF
+
 ;class FREADCLI
 MAIN_CHK18:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FREAD
@@ -799,8 +816,12 @@ MAIN_CHK18:
 
                     jp MAIN_END
 
+                ENDIF
+
 ;call FTELLCLI
 MAIN_CHK19:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FGETPOS
@@ -832,8 +853,12 @@ MAIN_CHK19:
 
                     jp MAIN_END
 
+                ENDIF
+
 ;call FSEEKSETCLI
 MAIN_CHK20:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FSEEKSET
@@ -865,8 +890,12 @@ MAIN_CHK20:
 
                     jp MAIN_END
 
+                ENDIF
+
 ;call FSEEKCURCLI
 MAIN_CHK21:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FSEEKCUR
@@ -898,8 +927,12 @@ MAIN_CHK21:
 
                     jp MAIN_END
 
+                ENDIF
+
 ;call FSEEKENDCLI
 MAIN_CHK22:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FSEEKEND
@@ -931,8 +964,12 @@ MAIN_CHK22:
 
                     jp MAIN_END
 
+                ENDIF
+
 ;call FREWINDCLI
 MAIN_CHK23:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FREWIND
@@ -964,8 +1001,13 @@ MAIN_CHK23:
 
                     jp MAIN_END
 
+                ENDIF
+
+
 ;call FPEEKCLI
 MAIN_CHK24:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FPEEK
@@ -996,8 +1038,13 @@ MAIN_CHK24:
                     call FPEEKCLI
 
                     jp MAIN_END
+
+                ENDIF
+
 ;call FWRITEBCLI
 MAIN_CHK25:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FWRITEB
@@ -1040,6 +1087,9 @@ MAIN_CHK25:
                     call FWRITEBCLI
 
                     jp MAIN_END
+
+                ENDIF
+
 ;call FCATCLI
 MAIN_CHK26:
                     ; test string lenghts
@@ -1070,6 +1120,8 @@ MAIN_CHK26:
 
 ;call FREADBCLI
 MAIN_CHK27:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FREADB
@@ -1113,8 +1165,13 @@ MAIN_CHK27:
 
                     jp MAIN_END
 
+                ENDIF
+
+
 ;call FTRUNCATECLI
 MAIN_CHK28:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FTRUNCATE
@@ -1145,6 +1202,9 @@ MAIN_CHK28:
                     call FTRUNCATECLI
 
                     jp MAIN_END
+
+                ENDIF
+
 ;call LSOFCLI
 MAIN_CHK29:
                     ; test string lenghts
@@ -1175,6 +1235,7 @@ MAIN_CHK29:
 
 ;call FGETSIZECLI
 MAIN_CHK30:
+                IF  DEBUG
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FGETSIZE
@@ -1205,8 +1266,13 @@ MAIN_CHK30:
                     call FGETSIZECLI
 
                     jp MAIN_END
+
+                ENDIF
+
 ;call FGETNAMECLI
 MAIN_CHK31:
+                IF  DEBUG
+
                     ; test string lenghts
                     ; get 1st len
                     ld hl, CMD_FGETNAME
@@ -1237,6 +1303,8 @@ MAIN_CHK31:
                     call FGETNAMECLI
 
                     jp MAIN_END
+
+                ENDIF
 
 ; call FSAVECLI
 MAIN_CHK32:
@@ -3988,6 +4056,9 @@ FEXISTFN_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FOPENCLI:
                     ;
                     ; entry point from cli
@@ -4050,6 +4121,8 @@ FOPENCLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -4297,6 +4370,9 @@ FOPENFN_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FCLOSECLI:
                     ;
                     ; entry point from cli
@@ -4322,6 +4398,8 @@ FCLOSECLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -4470,6 +4548,9 @@ FCLOSEHL_OK3:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FWRITECLI:
                     ;
                     ; entry point from cli
@@ -4532,6 +4613,8 @@ FWRITECLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -4801,6 +4884,9 @@ FWRITEFH_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FWRITEBCLI:
                     ;
                     ; entry point from cli
@@ -4877,6 +4963,8 @@ FWRITEBCLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -5246,6 +5334,9 @@ FWRITEBEND_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FREADCLI:
                     ;
                     ; entry point from cli
@@ -5330,6 +5421,8 @@ FREADCLI_OK:
                     rst   $30
                     
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -5555,6 +5648,9 @@ FREADFH_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FREADBCLI:
                     ;
                     ; entry point from cli
@@ -5631,6 +5727,8 @@ FREADBCLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -5977,6 +6075,9 @@ FREADBEND_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FPEEKCLI:
                     ;
                     ; entry point from cli
@@ -6039,6 +6140,8 @@ FPEEKCLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -6222,6 +6325,9 @@ FPEEKFH_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FTELLCLI:
                     ;
                     ; entry point from cli
@@ -6338,6 +6444,8 @@ FTELLCLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -6548,6 +6656,9 @@ FTELLFH_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FSEEKSETCLI:
                     ;
                     ; entry point from cli
@@ -6610,6 +6721,8 @@ FSEEKSETCLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -6943,6 +7056,9 @@ FSEEKSETFH_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FSEEKCURCLI:
                     ;
                     ; entry point from cli
@@ -7005,6 +7121,8 @@ FSEEKCURCLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -7338,6 +7456,9 @@ FSEEKCURFH_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FSEEKENDCLI:
                     ;
                     ; entry point from cli
@@ -7400,6 +7521,8 @@ FSEEKENDCLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -7733,6 +7856,9 @@ FSEEKENDFH_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FREWINDCLI:
                     ;
                     ; entry point from cli
@@ -7774,6 +7900,8 @@ FREWINDCLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -7914,6 +8042,9 @@ FREWINDFH_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FTRUNCATECLI:
                     ;
                     ; entry point from cli
@@ -7976,6 +8107,8 @@ FTRUNCATECLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -8305,6 +8438,9 @@ FTRUNCATEFH_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FGETSIZECLI:
                     ;
                     ; entry point from cli
@@ -8421,6 +8557,8 @@ FGETSIZECLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
@@ -8631,6 +8769,9 @@ FGETSIZEFH_OK:
 ;
 ;--------------------------------------------------------
 ;--------------------------------------------------------
+
+IF DEBUG
+
 FGETNAMECLI:
                     ;
                     ; entry point from cli
@@ -8662,6 +8803,7 @@ FGETNAMECLI:
                     ld   de,STR_SDSTATUS_BAD
                     ld   C,$06
                     rst   $30
+                
                     ret                 
 
 FGETNAMECLI_OK1:
@@ -8706,6 +8848,8 @@ FGETNAMECLI_OK:
                     ld   C,$06
                     rst   $30
                     ret
+
+ENDIF
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------
