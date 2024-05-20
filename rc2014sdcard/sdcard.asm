@@ -65,7 +65,8 @@
 ;          add run command on sdcard, filename must end with .com or .exe
 ;          (firmware v1.06g)
 ; v1.06q - minor fixes, changes & minor save space (firmware v1.06g)
-; v1.06r - Added conditional assembler for cli low level file operations (firmware v1.06g)     
+; v1.06r - Added conditional assembler for cli low level file operations (firmware v1.06g)
+; v1.06s - remove extra spaces from the command line (firmware v1.06g)
 ;
 
 DEBUG:            EQU   0x01
@@ -271,7 +272,7 @@ MAIN_LOOP:
                     ;ld   de,LINEBUF
                     ; load api id
                     ;ld   C,$06
-                    ; call api
+                    ;call api
                     ;rst   $30
 
                     ; output nl & cr
@@ -280,6 +281,13 @@ MAIN_LOOP:
                     ld a, '\r'
                     call OUTCHAR                    
 
+                    ; load string start address
+                    ld hl,LINEBUF
+                    ; remove extra spaces
+                    call DELEXSRTSPC
+
+                    ; parse the line extracting
+                    ; the command and arguments
                     call LINE_PARSE
 
                     ;
@@ -1459,6 +1467,50 @@ FNAME2WORD:
                     pop hl
 
                     ret
+
+;--------------------------------------------------------
+;
+; main helper - remove extra spaces in command line
+;
+;--------------------------------------------------------
+; Rotina para remover espaços consecutivos numa string
+; Endereço do primeiro caractere está em HL
+
+DELEXSRTSPC:
+    push hl                     ; Salva HL no stack
+    pop de                      ; Recupera HL em DE
+    ld a, (hl)                  ; Carrega o primeiro caractere em A
+    cp 0                        ; Verifica se é o fim da string (null terminator)
+    jp z, DESSPC_DONE           ; Se for o fim da string, termina
+
+DESSPC_LOOP:
+    ld a, (hl)                  ; Carrega o próximo caractere em A
+    inc hl                      ; Avança HL para o próximo caractere
+    cp ' '                      ; Compara A com o caractere de espaço
+    jr nz, DESSPC_CPYCHAR        ; Se não for espaço, copia o caractere
+
+    ; Encontrou um espaço, mantém um espaço e verifica os próximos caracteres
+    ld (de), a         ; Mantém um espaço na posição atual de DE
+    inc de             ; Avança o ponteiro de escrita em DE
+
+    ; Encontrou um espaço, verificar se o próximo também é espaço
+DESSPC_SKIPSPC:
+    ld a, (hl)                  ; Carrega o próximo caractere em A
+    inc hl                      ; Avança HL para o próximo caractere
+    cp 0                        ; Verifica se é o fim da string
+    jp z, DESSPC_DONE                  ; Se for o fim da string, termina
+    cp ' '                      ; Compara A com o caractere de espaço
+    jr z, DESSPC_SKIPSPC        ; Se for espaço, ignora e avança para o próximo caractere
+
+DESSPC_CPYCHAR:
+    ld (de), a                  ; Copia o caractere para a posição atual de DE
+    inc de                      ; Avança o ponteiro de escrita em DE
+    cp 0                        ; Verifica se é o fim da string (null terminator)
+    jr nz, DESSPC_LOOP          ; Se não for o fim, continua no loop principal
+
+DESSPC_DONE:
+    ld (de), a                  ; Escreve o null terminator no final da string
+    ret                         ; Retorna da rotina
 
 ;--------------------------------------------------------
 ;
@@ -5255,10 +5307,11 @@ FWRITEBWDRES:
                     ; get data (1st byte)
                     in   a,(SDCRD)   
                     
-                    ; store data in memory 
+                    ; store data in memory
+                    ; LSB first 
                     ld hl, NUM_BYTES
+                    ;inc hl
                     ld (hl), a
-
 
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -5271,7 +5324,8 @@ FWRITEBWDRES:
                     ; get data (2nd byte)
                     in   a,(SDCRD)
 
-                    ; store data in memory 
+                    ; store data in memory
+                    ; MSB second
                     inc hl
                     ld (hl), a
 
