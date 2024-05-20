@@ -45,12 +45,12 @@ Commands
 - fdspace (sd card free space info)
 - tdspace (sd card total space info)
 - setorg (set org to auto run commands on files in sdcard)
-- run *.com and *.exe files by name (without extension)
+- run [HHHH] (run program at address, like g in SCM)
+- run exernal commandss, by load and run *.com and *.exe files by name (without extension)
 
 Commands to add:  
 - help (will be a external command)
 - format (will be external command, requires firmware changes)
-
 
 # Extra commands for API
 The commands above (cli exploration) are also to be part of the API commands.  
@@ -135,6 +135,7 @@ Still stick at 3rd, and not forseen changes
 - make load quickier, (done a litle bit).
 - make save quickier
 - make it smaller (remove some push and pops of hl and de ???)
+- check the if the hex entries are valid
 
 # operations status and command codes
 https://docs.google.com/spreadsheets/d/1EDnzh6c8GuFteZskviRQ0HXl_1hdd2McFDgUcx4P_4A/edit?usp=sharing

@@ -69,6 +69,7 @@
 ; v1.06s - remove extra spaces from the command line (firmware v1.06g)
 ; v1.07a - add fdspace & tdspace (firmware v1.07a)
 ; v1.07b - add version to welcome & cosmetics (firmware v1.07a)
+; v1.07c - add run command (like g in SCM) (firmware v1.07a)
 ;
 ; ATENTION!!!
 ; REMEMBER TO UPDATE VERSION STRING AT END
@@ -595,18 +596,82 @@ MAIN_CHK10:
                     ; dispatch
                     jp MAIN_RETURN
 
-;call FEXISTCLI
+;call RUNCLI
 MAIN_CHK11:
-                    ;ld hl, CMD_EXIST
-                    ;ld de, FILE_CMD
+
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_RUN
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK12
+
+                    ; ok same lenght
+                    ld hl, CMD_RUN
+                    ld de, FILE_CMD
                     
-                    ;call STRCMP
-                    ;jr nz, MAIN_CHK12
-                    
+                    call STRCMP
+                    jr nz, MAIN_CHK12
+
+                    ; check len of FILE_NAME
+                    ld hl, FILE_NAME
+                    call STRLEN
+
+                    ;push af
+                    ;call SHOWHEXBYTECR
+                    ;pop af
+
+                    cp 0x04
+                    jr nz, MAIN_CHK11_ORG
+
+                    ;ld a, '4'
+                    ;call OUTCHAR
+
+                    ; it have 4 chars
+                    ; FILE_NAME to numeric 
+                    ; bin at FILE_START
+                    call FNAME2WORD
+
+                    ; now prepare the copy of
+                    ; TMP_WORD to FILE_START
+                    ld hl, TMP_WORD
+
+                    jr MAIN_CHK11_RUN
+
+MAIN_CHK11_ORG:
+                    ;ld a, 'D'
+                    ;call OUTCHAR
+
+                    ; it does not have the required
+                    ; number of chars (4), prepare 
+                    ; copy of CLI_ORG to FILE_START
+                    ld hl, CLI_ORG
+
+MAIN_CHK11_RUN:
+                    ; continue the copy
+                    ; set destination
+                    ld de, FILE_START
+
+                    ld a, (hl)
+                    ld (de), a
+                    inc hl
+                    inc de
+                    ld a, (hl)
+                    ld (de), a
+
                     ; dispatch
-                    ;call FEXISTCLI
-                
-                    ;jp MAIN_END
+                    call RUNCLI
+
+                    jp MAIN_END
+
+
 ;call SDIFRESETCLI
 MAIN_CHK12:
                     ; test string lenghts
@@ -1682,39 +1747,6 @@ LINE_PARSE3:
                     ;
                     pop hl
 
-                    ;push hl
-                    ;
-                    ; display string
-                    ;ld   de, FILE_CMD
-                    ; load api id
-                    ;ld c,$06
-                    ; call api
-                    ;rst   $30
-                    ;
-                    ;pop hl
-                    
-                    ;ld a, '\n';
-                    ;call OUTCHAR
-                    ;ld a, '\r';
-                    ;call OUTCHAR
-                    
-                    ;push hl
-                    ;
-                    ; display string
-                    ;ld   de, FILE_NAME
-                    ; load api id
-                    ;ld c,$06
-                    ; call api
-                    ;rst   $30
-                    ;
-                    ;pop hl
-                    
-                    ;ld a, '\n';
-                    ;call OUTCHAR
-                    ;ld a, '\r';
-                    ;call OUTCHAR
-
-                    
 LINE_PARSE_END:
                     ret
 
@@ -1791,6 +1823,71 @@ GOT_BADHEX:
 GOT_OKHEX:                    
                     ld a, 1
                     call HEX2NUM
+                    ret
+
+;--------------------------------------------------------
+;
+; Run already loaded program
+;
+;--------------------------------------------------------
+;--------------------------------------------------------
+RUNCLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call RUNSTART
+
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+
+RUNSTART:
+                    ; check if it is
+                    ; a valid number
+                    ; cannot be 0101
+                    ld hl, FILE_START
+                    ld a,(hl)
+                    inc hl
+                    ld e,(hl)
+
+                    ; check if a = e
+                    cp e
+                    jr nz, RUNSTART_OK1
+
+                    ; check if they are 01
+                    cp 0x01
+                    jr nz, RUNSTART_OK1  
+
+                    ; not ok show error msg
+                    ; call api: print str
+                    ld   de, STR_ARG_ERROR
+                    ld   c,$06
+                    rst  $30
+
+                    ret                  
+
+RUNSTART_OK1:
+                    ;
+                    ; its a valid hex (is not 0101)
+                    ; try to run the program
+                    ;
+                    
+                    ld de, FILE_START
+                    ld a, (de);
+                    ld h, a
+                    inc de
+                    ld a,(de);
+                    ld l, a
+
+                    ; call it
+                    jp (hl)
+
+                    ;
+                    ; end
+                    ;
+
+                    ld a, 0x00
                     ret
 
 ;--------------------------------------------------------
@@ -1888,7 +1985,6 @@ COMEXE_OK1:
                     ;
                     jr COMEXE_NOTFOUND
 
-
 COMEXE_OK2:
                     ;
                     ; is .com or .exe file
@@ -1950,7 +2046,6 @@ COMEXE_OK:
                     ; run program
                     ;
                     
-
                     ld de, CLI_ORG
                     ld a, (de);
                     ld h, a
@@ -1968,7 +2063,6 @@ COMEXE_OK:
 
                     ld a, 0x00
                     ret
-
 
 ;--------------------------------------------------------
 ;
@@ -2067,7 +2161,6 @@ FDELFN_OK2:
                     call SENDFNAME   
                     pop  hl
                     pop  bc
-
 
                     ; wait 10 ms before any
                     ; in or out to SD card
@@ -9227,30 +9320,15 @@ LISTCLI:
                     ret                 
 
 LISTCLI_OK:
-                    ; read memory variable
-                    ; hold file handle
-                    ;ld hl, TMP_BYTE
-                    ;ld a, (hl)
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
+                    ;
+                    ; list ends ok
+                    ;
 
                     ld a, '\n'
                     call OUTCHAR 
                     ld a, '\r'
                     call OUTCHAR
 
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
-                                        ;
                     ; display end message
                     ; using scm api
                     ld   de,STR_DIROK
@@ -9319,8 +9397,8 @@ LISTFN_LOOP:
                     rst   $30
                     ;pop hl
 
-                    ; we have an /n terminator
-                    ; need to put the /r
+                    ; we have an \n terminator
+                    ; need to put the \r
                     ld a, '\n'
                     call OUTCHAR
                     ld a, '\r'
@@ -9983,14 +10061,16 @@ CMD_FGETNAME:        DB      "FGETNAME",0
 CMD_SETORG:          DB      "SETORG",0
 CMD_FDSPACE:         DB      "FDSPACE",0
 CMD_TDSPACE:         DB      "TDSPACE",0
+CMD_RUN:             DB      "RUN",0
 
 ;
 ; strings definition
 ; 
 STR_ZTGSDC:          DB      "ztg80 SDcard OS\n\r",0
-STR_ZTGVER:          DB      "v1.07b\n\r",0
+STR_ZTGVER:          DB      "v1.07c\n\r",0
 
 STR_OK:              DB      "OK\n\r",0
+STR_ARG_ERROR:       DB      "Error\n\r",0
 
 STR_CMD:             DB      ">",0
 STR_CMD_NOTFOUND:    DB      "Command not found",0
