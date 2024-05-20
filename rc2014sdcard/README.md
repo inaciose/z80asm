@@ -40,18 +40,21 @@ Commands
 - sdifs
 - reset
 - exit
-- cat
+- cat name
 - lsof (list open files)
+- fdspace (sd card free space info)
+- tdspace (sd card total space info)
+- setorg (set org to auto run commands on files in sdcard)
 - run *.com and *.exe files by name (without extension)
 
 Commands to add:  
-- help
-- format
-- volume (sd card info)
+- help (will be a external command)
+- format (will be external command, requires firmware changes)
 
-# File management program API
-the commands above (cli exploration) are also to be part of the  
-commands (also available on SCM app (for testing)  
+
+# Extra commands for API
+The commands above (cli exploration) are also to be part of the API commands.  
+In debug mode this extra commands are also available on SCM app for testing.  
 - fopen name HHHH                             name openmode
 - fclose HH                                   handleid
 - fwrite HH HH (write byte)                   handleid byte
@@ -68,16 +71,12 @@ commands (also available on SCM app (for testing)
 - fgetsize HH                                 handleid
 - fgetname HH                                 handleid
 
-commands to add:  
-- bool 	isDir () const
-- bool 	isFile () const
+Commands to add in C api (not in rom):  
+- bool 	isDir () const (can be constructed with fexist output)
+- bool 	isFile () const (can be constructed with fexist output)
 - int 	write (const char *str)
 - int16_t 	fgets (char *str, int16_t num, char *delim=0)
 - ??? bool 	isOpen () : (can be made with lsfo and getFilename ???)
-
-Commands to add that requires changes in firmware:  	
-- format
-- volume (sd card info)
 
 # Programer API - Interface for external program usage
 The developmente of API for interface with the programs is waiting for the development of the base I/O routines that is still a work in progress.
@@ -122,8 +121,7 @@ It can save and load.
 if there is an sdcard interface error, quit the program, then reset the interface by typing the following on the monitor:
 - o 40 f
 
-# todo
-- Parameters and results passing.  
+# notes about parameters and results passing.  
 
 Possible options:
 1. use registers to pass required parameters
@@ -132,9 +130,10 @@ Possible options:
 
 Still stick at 3rd, and not forseen changes  
 
+# todo
 - make load quickier, (done a litle bit).
 - make save quickier
-- add commands for more operations
+- make it smaller (remove some push and pops of hl and de ???)
 
 # operations status and command codes
 https://docs.google.com/spreadsheets/d/1EDnzh6c8GuFteZskviRQ0HXl_1hdd2McFDgUcx4P_4A/edit?usp=sharing

@@ -67,11 +67,11 @@
 ; v1.06q - minor fixes, changes & minor save space (firmware v1.06g)
 ; v1.06r - Added conditional assembler for cli low level file operations (firmware v1.06g)
 ; v1.06s - remove extra spaces from the command line (firmware v1.06g)
+; v1.07a - add fdspace & tdspace (firmware v1.07a)
 ;
 
-DEBUG:            EQU   0x01
+DEBUG:              EQU   0x01
 
-;                    ORG   $8000   
                     ORG   $2000
 
 ; sdcard io addresses
@@ -137,6 +137,9 @@ SDCSFGSIZEHDL:      EQU   0x68 ; get file size file handle
 SDCSFGSIZE:         EQU   0x6A ; get file size
 SDCSFGNAMEHDL:      EQU   0x6C ; get file name file handle
 SDCSFGNAME:         EQU   0x6E ; get file name
+SDCSTOTALSPACE:     EQU   0x72 ; get total space in sdcard
+SDCSFREESPACE:      EQU   0x74 ; get free space in sdcard
+
 
 ; sdcard io commands start
 SDCMDRESET:          EQU   0x0f
@@ -169,6 +172,8 @@ SDCMDFTRUNCATE:      EQU   0x2C
 SDCMDLSOF:           EQU   0x2D
 SDCMDFGETSIZE:       EQU   0x2E
 SDCMDFGETNAME:       EQU   0x2F
+SDCMDTOTALSPACE:     EQU   0x30
+SDCMDFREESPACE:      EQU   0x31
 
 ;
 ;
@@ -207,6 +212,8 @@ APIFTRUNCATE:        jp FTRUNCATEAPI
 APILSOF:             jp LSOFAPI
 APIFGETSIZE:         jp FGETSIZEAPI
 APIFGETNAME:         jp FGETNAMEAPI
+APIFDSPACE:          jp FDSPACEAPI
+APITDSPACE:          jp TDSPACEAPI
 
 ; just info
 MAIN:        
@@ -1342,11 +1349,11 @@ MAIN_CHK32:
 
                     jp MAIN_END
 
-;SETORGCLI
+;call FDSPACECLI
 MAIN_CHK33:
                     ; test string lenghts
                     ; get 1st len
-                    ld hl, CMD_SETORG
+                    ld hl, CMD_FDSPACE
                     call STRLEN
                     ; store len in register e
                     ld e, a
@@ -1359,11 +1366,67 @@ MAIN_CHK33:
                     jr nz, MAIN_CHK34
 
                     ; ok same lenght
-                    ld hl, CMD_SETORG
+                    ld hl, CMD_FDSPACE
                     ld de, FILE_CMD
                     
                     call STRCMP
                     jr nz, MAIN_CHK34
+
+                    ; dispatch
+                    call FDSPACECLI
+
+                    jp MAIN_END
+
+;call TDSPACECLI
+MAIN_CHK34:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_TDSPACE
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK35
+
+                    ; ok same lenght
+                    ld hl, CMD_TDSPACE
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK35
+
+                    ; dispatch
+                    call TDSPACECLI
+
+                    jp MAIN_END
+
+;SETORGCLI
+MAIN_CHK35:
+                    ; test string lenghts
+                    ; get 1st len
+                    ld hl, CMD_SETORG
+                    call STRLEN
+                    ; store len in register e
+                    ld e, a
+                    ; get 2nd len
+                    ld hl, FILE_CMD
+                    call STRLEN
+                    ; compare it with len
+                    ; in register register e
+                    cp e
+                    jr nz, MAIN_CHK36
+
+                    ; ok same lenght
+                    ld hl, CMD_SETORG
+                    ld de, FILE_CMD
+                    
+                    call STRCMP
+                    jr nz, MAIN_CHK36
 
                     ; prepare address
                     ; to set for org
@@ -1396,7 +1459,7 @@ MAIN_CHK33:
                     jp MAIN_END
 
 ;
-MAIN_CHK34:
+MAIN_CHK36:
                     ;
                     ; try to run cmd.com
                     ; 
@@ -3849,20 +3912,8 @@ GETSDIFSCLI_OK:
                     ld hl, OUT_BYTE
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
-
+                    call SHOWHEXBYTECR
+                    
                     ; and ok end message
                     ; using scm api
                     ld   de,STR_SDIFSOK
@@ -3938,19 +3989,7 @@ FEXISTCLI_OK:
                     ld hl, OUT_BYTE
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
                      
                     ; and ok end message
                     ; using scm api
@@ -4123,19 +4162,7 @@ FOPENCLI:
 
                     ; display error code
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -4153,19 +4180,7 @@ FOPENCLI_OK:
                     ld hl, OUT_BYTE
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; and ok end message
                     ; using scm api
@@ -4292,23 +4307,8 @@ FOPENFN_OK3:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
-
 
                     out (SDCWD),a
 
@@ -4532,21 +4532,7 @@ FCLOSEHL_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -4614,20 +4600,7 @@ FWRITECLI:
                     jr z, FWRITECLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -4645,19 +4618,7 @@ FWRITECLI_OK:
                     ld hl, OUT_BYTE1
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; and ok end message
                     ; using scm api
@@ -4747,21 +4708,7 @@ FWRITEFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -4812,21 +4759,7 @@ FWRITEFH_OK3:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -4950,20 +4883,7 @@ FWRITEBCLI:
                     jr z, FWRITEBCLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -4995,19 +4915,7 @@ FWRITEBCLI_OK:
                     dec hl         
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display ok end message
                     ; using scm api
@@ -5096,21 +5004,7 @@ FWRITEBFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -5402,20 +5296,7 @@ FREADCLI:
                     jr z, FREADCLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -5434,19 +5315,7 @@ FREADCLI_OK:
                     ld hl, OUT_BYTE
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ;
                     ; display result
@@ -5557,21 +5426,7 @@ FREADFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -5716,20 +5571,7 @@ FREADBCLI:
                     jr z, FREADBCLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -5761,19 +5603,7 @@ FREADBCLI_OK:
                     dec hl         
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display ok end message
                     ; using scm api
@@ -5862,21 +5692,7 @@ FREADBFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -6143,20 +5959,7 @@ FPEEKCLI:
                     jr z, FPEEKCLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -6173,20 +5976,8 @@ FPEEKCLI_OK:
                     ; read memory variable
                     ld hl, OUT_BYTE
                     ld a, (hl)
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    
+                    call SHOWHEXBYTECR
 
                     ; and ok end message
                     ; using scm api
@@ -6276,21 +6067,7 @@ FPEEKFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -6393,20 +6170,7 @@ FTELLCLI:
                     jr z, FTELLCLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -6485,7 +6249,6 @@ FTELLCLI_OK:
                     call OUTCHAR
 
                     pop hl 
-
 
                     ld a, '\n'
                     call OUTCHAR 
@@ -6580,21 +6343,7 @@ FTELLFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -6724,20 +6473,7 @@ FSEEKSETCLI:
                     jr z, FSEEKSETCLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -6755,19 +6491,7 @@ FSEEKSETCLI_OK:
                     ld hl, OUT_BYTE1
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; and ok end message
                     ; using scm api
@@ -6857,21 +6581,7 @@ FSEEKSETFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -6930,21 +6640,7 @@ FSEEKSETFH_OK3:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
 
@@ -6993,21 +6689,7 @@ FSEEKSETFH_OK3:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
 
@@ -7124,20 +6806,7 @@ FSEEKCURCLI:
                     jr z, FSEEKCURCLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -7155,19 +6824,7 @@ FSEEKCURCLI_OK:
                     ld hl, OUT_BYTE1
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; and ok end message
                     ; using scm api
@@ -7257,21 +6914,7 @@ FSEEKCURFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -7330,21 +6973,7 @@ FSEEKCURFH_OK3:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
 
@@ -7393,23 +7022,8 @@ FSEEKCURFH_OK3:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
-
 
                     out (SDCWD),a
 
@@ -7524,20 +7138,7 @@ FSEEKENDCLI:
                     jr z, FSEEKENDCLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -7555,19 +7156,7 @@ FSEEKENDCLI_OK:
                     ld hl, OUT_BYTE1
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; and ok end message
                     ; using scm api
@@ -7657,21 +7246,7 @@ FSEEKENDFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -7730,21 +7305,7 @@ FSEEKENDFH_OK3:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
 
@@ -7793,21 +7354,7 @@ FSEEKENDFH_OK3:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
 
@@ -7924,20 +7471,7 @@ FREWINDCLI:
                     jr z, FREWINDCLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -8036,21 +7570,7 @@ FREWINDFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -8110,20 +7630,7 @@ FTRUNCATECLI:
                     jr z, FTRUNCATECLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -8141,19 +7648,7 @@ FTRUNCATECLI_OK:
                     ld hl, OUT_BYTE1
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; and ok end message
                     ; using scm api
@@ -8243,21 +7738,7 @@ FTRUNCATEFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -8316,21 +7797,7 @@ FTRUNCATEFH_OK3:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -8378,21 +7845,7 @@ FTRUNCATEFH_OK3:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -8486,6 +7939,7 @@ FTRUNCATEFH_OK:
 
                     ld a, 0x00
                     ret
+
 ;--------------------------------------------------------
 ;
 ; Get file size - fgetsize (int *ofhld)
@@ -8506,20 +7960,7 @@ FGETSIZECLI:
                     jr z, FGETSIZECLI_OK
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -8693,21 +8134,7 @@ FGETSIZEFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -8837,20 +8264,7 @@ FGETNAMECLI:
                     jr z, FGETNAMECLI_OK1
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -8984,21 +8398,7 @@ FGETNAMEFH_OK2:
                     ld   a, (hl)
 
                     ;push af
-
-                    ; convert to hex
-                    ;call NUM2HEX;
-
-                    ; display hex
-                    ;ld a, d
-                    ;call OUTCHAR 
-                    ;ld a, e
-                    ;call OUTCHAR 
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
+                    ;call SHOWHEXBYTECR
                     ;pop af
 
                     out (SDCWD),a
@@ -9126,20 +8526,7 @@ LSOFCLI:
                     jr z, LSOFCLI_OK1
 
                     ; display error code
-
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -9348,6 +8735,502 @@ LSOF_OK:
 
 ;--------------------------------------------------------
 ;
+; Get free space in sdcard  - fdspace
+;
+;--------------------------------------------------------
+;--------------------------------------------------------
+
+FDSPACECLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call FDSPACE
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, FDSPACECLI_OK
+
+                    ; display error code
+                    call SHOWHEXBYTECR
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                 
+
+FDSPACECLI_OK:
+                    ;
+                    ; display file size
+                    ;
+
+                    ; read memory variable
+                    ld hl, OUT_LONG
+                    ld a, (hl)
+
+                    ; byte 4
+                    push hl
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl
+
+                    ; byte 3
+                    inc hl
+                    ld a, (hl)
+                    push hl 
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl
+
+                    ; byte 2
+                    inc hl
+                    ld a, (hl)
+                    push hl 
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl
+
+                    ; byte 1 (last)
+                    inc hl
+                    ld a, (hl)
+                    push hl
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; and ok end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+FDSPACEAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+FDSPACE:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,FDSPACE_OK1
+
+; just info
+FDSPACE_FAIL1:
+                    ret
+
+FDSPACE_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start get file size
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDFREESPACE   
+                    out   (SDCWC),a
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSFREESPACE
+                    jr   z,FDSPACE_OK2
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+
+FDSPACE_OK2:
+                    ; set variable top
+                    ; memory address
+                    ld hl, OUT_LONG
+                    inc hl
+                    inc hl
+                    inc hl
+
+FDSPACE_LOOP:
+                    ; read pos byte from file
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get data
+                    in   a,(SDCRD)   
+                    
+                    ; store data in
+                    ; memory address
+                    ld (hl), a
+                    dec hl
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; are bytes available ?
+                    cp   SDCSFREESPACE
+                    jr   z, FDSPACE_LOOP
+                    
+                    ;
+                    ; no more bytes for
+                    ; position in file
+                    ;
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; is in idle state ?
+                    cp   SDCSIDL
+                    jr   z, FDSPACE_OK
+                    
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x04
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+
+FDSPACE_OK:
+                    ;
+                    ; operation ok
+                    ;
+
+                    ld a, 0x00
+                    ret
+
+;--------------------------------------------------------
+;
+; Get total space in sdcard in MB - fdspace
+;
+;--------------------------------------------------------
+;--------------------------------------------------------
+
+TDSPACECLI:
+                    ;
+                    ; entry point from cli
+                    ;
+                    call TDSPACE
+
+                    ; check for operation result
+                    cp 0x00
+                    jr z, TDSPACECLI_OK
+
+                    ; display error code
+                    call SHOWHEXBYTECR
+
+                    ; display error end message
+                    ; using scm api
+                    ld   de,STR_SDSTATUS_BAD
+                    ld   C,$06
+                    rst   $30
+                    ret                 
+
+TDSPACECLI_OK:
+                    ;
+                    ; display file size
+                    ;
+
+                    ; read memory variable
+                    ld hl, OUT_LONG
+                    ld a, (hl)
+
+                    ; byte 4
+                    push hl
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl
+
+                    ; byte 3
+                    inc hl
+                    ld a, (hl)
+                    push hl 
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl
+
+                    ; byte 2
+                    inc hl
+                    ld a, (hl)
+                    push hl 
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl
+
+                    ; byte 1 (last)
+                    inc hl
+                    ld a, (hl)
+                    push hl
+
+                    ; convert to hex
+                    call NUM2HEX;
+
+                    ; display hex
+                    ld a, d
+                    call OUTCHAR 
+                    ld a, e
+                    call OUTCHAR
+
+                    pop hl 
+
+                    ld a, '\n'
+                    call OUTCHAR 
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; and ok end message
+                    ; using scm api
+                    ld   de,STR_OK
+                    ld   C,$06
+                    rst   $30
+                    ret
+
+;--------------------------------------------------------
+;--------------------------------------------------------
+TDSPACEAPI:
+                    ;
+                    ; entry point from api
+                    ;
+
+;--------------------------------------------------------
+;--------------------------------------------------------                    
+TDSPACE:
+                    ; check idle status                    
+                    call SDCIDLECHK
+                    jr   z,TDSPACE_OK1
+
+; just info
+TDSPACE_FAIL1:
+                    ret
+
+TDSPACE_OK1:
+                    ;
+                    ; sdcard status is ok
+                    ;
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start get file size
+                    ; load cmd code in a, see equs
+                    ld   a,SDCMDTOTALSPACE   
+                    out   (SDCWC),a
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; if status is not ok exit
+                    cp   SDCSTOTALSPACE
+                    jr   z,TDSPACE_OK2
+
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x02
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+
+TDSPACE_OK2:
+                    ; set variable top
+                    ; memory address
+                    ld hl, OUT_LONG
+                    inc hl
+                    inc hl
+                    inc hl
+
+TDSPACE_LOOP:
+                    ; read pos byte from file
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get data
+                    in   a,(SDCRD)   
+                    
+                    ; store data in
+                    ; memory address
+                    ld (hl), a
+                    dec hl
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; are bytes available ?
+                    cp   SDCSTOTALSPACE
+                    jr   z, TDSPACE_LOOP
+                    
+                    ;
+                    ; no more bytes for
+                    ; position in file
+                    ;
+
+                    ; wait 10 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld   de, 1
+                    ld   c, $0a
+                    rst  $30
+                    pop  hl
+
+                    ; get sdif status
+                    in   a,(SDCRS)   
+                    ; is in idle state ?
+                    cp   SDCSIDL
+                    jr   z, TDSPACE_OK
+                    
+                    ; set error code and
+                    ; return to caller
+                    ;push hl
+                    ld a, 0x04
+                    ld hl, ERROR_CODE
+                    ld (hl), a
+                    ;pop hl
+
+                    ret
+
+TDSPACE_OK:
+                    ;
+                    ; operation ok
+                    ;
+
+                    ld a, 0x00
+                    ret
+
+;--------------------------------------------------------
+;
 ; List files in a directory on SD
 ;
 ;--------------------------------------------------------
@@ -9387,19 +9270,7 @@ LISTCLI:
                     ld hl, TMP_BYTE2
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -9565,19 +9436,7 @@ FCATCLI:
                     ld hl, TMP_BYTE2
                     ld a, (hl)
 
-                    ; convert to hex
-                    call NUM2HEX;
-
-                    ; display hex
-                    ld a, d
-                    call OUTCHAR 
-                    ld a, e
-                    call OUTCHAR 
-
-                    ld a, '\n'
-                    call OUTCHAR 
-                    ld a, '\r'
-                    call OUTCHAR
+                    call SHOWHEXBYTECR
 
                     ; display error end message
                     ; using scm api
@@ -10079,6 +9938,31 @@ NUM2HEX2:
 
 ;--------------------------------------------
 
+;
+; display one bye ascii hex followed by NL CR
+
+; register A have the byte to display
+; This is read as an 8 bit hex number
+; push registers we need to preserve to
+; stack before use this routine
+SHOWHEXBYTECR:
+                        ; convert to hex
+                        call NUM2HEX;
+
+                        ; display hex
+                        ld a, d
+                        call OUTCHAR 
+                        ld a, e
+                        call OUTCHAR 
+
+                        ld a, '\n'
+                        call OUTCHAR 
+                        ld a, '\r'
+                        call OUTCHAR
+
+                        ret
+
+;--------------------------------------------
 
 OUTCHAR:      
                     ; print char on
@@ -10178,6 +10062,8 @@ CMD_LSOF:            DB      "LSOF",0
 CMD_FGETSIZE:        DB      "FGETSIZE",0
 CMD_FGETNAME:        DB      "FGETNAME",0
 CMD_SETORG:          DB      "SETORG",0
+CMD_FDSPACE:         DB      "FDSPACE",0
+CMD_TDSPACE:         DB      "TDSPACE",0
 
 ;
 ; RAM zone - variables
