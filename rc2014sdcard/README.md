@@ -131,6 +131,7 @@ Possible options:
 Still stick at 3rd, and not forseen changes  
 
 # todo
+- on copy and rename commands, check if dst file exists, and check if is dir, if is dir dont copy 
 - make load quickier, (done a litle bit).
 - make save quickier
 - make it smaller (remove some push and pops of hl and de ???)

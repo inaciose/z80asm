@@ -68,19 +68,24 @@
 ; v1.06r - Added conditional assembler for cli low level file operations (firmware v1.06g)
 ; v1.06s - remove extra spaces from the command line (firmware v1.06g)
 ; v1.07a - add fdspace & tdspace (firmware v1.07a)
+; v1.07b - add version to welcome & cosmetics (firmware v1.07a)
 ;
+; ATENTION!!!
+; REMEMBER TO UPDATE VERSION STRING AT END
 
 DEBUG:              EQU   0x01
 
                     ORG   $2000
 
-; sdcard io addresses
-SDCRS:              EQU   0x40   
-SDCRD:              EQU   0x41   
-SDCWC:              EQU   0x40   
-SDCWD:              EQU   0x41 
+; Connection to SD card device firmware
+; Interface addresses used in operation
+SDCRS:              EQU   0x40   ; read status
+SDCRD:              EQU   0x41   ; read data from device
+SDCWC:              EQU   0x40   ; write command
+SDCWD:              EQU   0x41   ; write data to device
 
-; sdcard io status
+; Connection to SD card device firmware
+; Firmware status codes for each situation
 SDCSIDL:            EQU   0x00 ;  
 SDCSWFN:            EQU   0x06 ; write file, send name 
 SDCSWFD:            EQU   0x08 ; write file, send data
@@ -140,8 +145,8 @@ SDCSFGNAME:         EQU   0x6E ; get file name
 SDCSTOTALSPACE:     EQU   0x72 ; get total space in sdcard
 SDCSFREESPACE:      EQU   0x74 ; get free space in sdcard
 
-
-; sdcard io commands start
+; Connection to SD card device firmware
+; Commands that initiate I/O operations
 SDCMDRESET:          EQU   0x0f
 SDCMDLOAD:           EQU   0x0d
 SDCMDSAVE:           EQU   0x0c
@@ -175,12 +180,9 @@ SDCMDFGETNAME:       EQU   0x2F
 SDCMDTOTALSPACE:     EQU   0x30
 SDCMDFREESPACE:      EQU   0x31
 
-;
-;
-; try to mantain a stable
-; address to calling routines
-; api call jump table 
-;
+; API call jump table
+; maintains stable addresses 
+; for calls to routines
 CLIENTRY:            jr MAIN
 APIFSAVE:            jp FSAVEAPI
 APIFLOAD:            jp FLOADAPI
@@ -227,19 +229,33 @@ MAIN:
                     inc hl
                     ld (hl), 0x00
 
-MAIN_LOOP:
-                    ; display start message
+                    ; output nl & cr
+                    ld a, '\n'
+                    call OUTCHAR
+                    ld a, '\r'
+                    call OUTCHAR
+                    ld a, '\n'
+                    call OUTCHAR
+
+                    ; display welcome message
                     ; call api: print str
-                    ld   de,STR_ZTGSDC
+                    ld   de, STR_ZTGSDC
                     ld   c,$06
-                    rst  $30   
-                                        
+                    rst  $30
+
+                    ; display version
+                    ; call api: print str
+                    ld   de, STR_ZTGVER
+                    ld   c,$06
+                    rst  $30
+
+MAIN_LOOP:
+          
                     ; display get cmd message
                     ; call api: print str
                     ld   de, STR_CMD
                     ld   C,$06
                     rst   $30 
-
 
                     ; init LINETMP to zero
                     ld hl,LINETMP
@@ -262,32 +278,6 @@ MAIN_LOOP:
                     ld c, $04
                     rst   $30
 
-                    ;
-                    ; display label save filename
-
-                    ; load string start address
-                    ;ld   de,STR_LOAD
-                    ; load api id
-                    ;ld   C,$06
-                    ; call api
-                    ;rst   $30
-                    
-                    ;
-                    ; display line buffer
-                    ;
-                    ; load string  start address
-                    ;ld   de,LINEBUF
-                    ; load api id
-                    ;ld   C,$06
-                    ;call api
-                    ;rst   $30
-
-                    ; output nl & cr
-                    ld a, '\n'
-                    call OUTCHAR
-                    ld a, '\r'
-                    call OUTCHAR                    
-
                     ; load string start address
                     ld hl,LINEBUF
                     ; remove extra spaces
@@ -306,16 +296,27 @@ MAIN_LOOP:
                     
                     ; dummy check to handle 
                     ; return key only
-                    ; the '/0' on FILE_CMD
+                    ; the '\0' on FILE_CMD
                     ; match the compare
                     ld hl, CMD_RET
                     ld de, FILE_CMD
                     
                     call STRCMP
-                    jr nz, MAIN_CHK1
+                    jr nz, MAIN_NLCR
 
                     ; dispatch
                     jp MAIN_END
+
+MAIN_NLCR:
+                    ; output nl & cr
+                    ld a, '\n'
+                    call OUTCHAR
+                    ld a, '\r'
+                    call OUTCHAR
+
+                    ; continue checking
+                    ; valid commands                   
+             
 ;call LISTCLI
 MAIN_CHK1:
                     ; test string lenghts
@@ -1804,31 +1805,7 @@ COMEXECLI:
                     ;
                     call COMEXE
 
-                    ; check for operation result
-                    cp 0x00
-                    jr z, COMEXECLI_OK
-
-                    ; display error end message
-                    ; using scm api
-                    ;ld   de,STR_SDSTATUS_BAD
-                    ;ld   C,$06
-                    ;rst   $30
-                    ret                 
-
-COMEXECLI_OK:
-                    ; display ok end message
-                    ; using scm api
-                    ;ld   de,STR_OK
-                    ;ld   C,$06
-                    ;rst   $30
                     ret
-
-;--------------------------------------------------------
-;--------------------------------------------------------
-COMEXEAPI:
-                    ;
-                    ; entry point from api
-                    ;
 
 ;--------------------------------------------------------
 ;--------------------------------------------------------                    
@@ -1851,16 +1828,6 @@ COMEXE_OK1:
                     ld de, FILE_NAME                      
                     call STRCPY
 
-                    ; debug
-                    ;ld   de,FILE_CMD
-                    ;ld   C,$06
-                    ;rst   $30
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
-
                     ;
                     ; try fname.com
                     ; add .com to string
@@ -1868,16 +1835,6 @@ COMEXE_OK1:
                     ld hl, STR_COM
                     ld de, FILE_NAME
                     call STRCAT
-
-                    ; debug
-                    ;ld   de,FILE_NAME
-                    ;ld   C,$06
-                    ;rst   $30
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
 
                     ;
                     ; check if com file exists
@@ -1909,16 +1866,6 @@ COMEXE_OK1:
                     ld hl, STR_EXE
                     ld de, FILE_NAME
                     call STRCAT
-
-                    ; debug
-                    ;ld   de,FILE_NAME
-                    ;ld   C,$06
-                    ;rst   $30
-
-                    ;ld a, '\n'
-                    ;call OUTCHAR 
-                    ;ld a, '\r'
-                    ;call OUTCHAR
 
                     ;
                     ; check if com file exists
@@ -3993,7 +3940,7 @@ FEXISTCLI_OK:
                      
                     ; and ok end message
                     ; using scm api
-                    ld   de,STR_SDIFSOK
+                    ld   de,STR_EXISTOK
                     ld   C,$06
                     rst   $30
                     ret
@@ -9542,13 +9489,10 @@ FCATFN_OK2:
                     ld hl, TMP_BYTE
                     ld (hl), a
 
-                    ;
                     ; read byte from file until it ends
                     ; and display received char
                     ; using fread (handle)
-                    ;
 
-                    ;
                     ;
                     ; prepare fread
                     ;
@@ -9645,7 +9589,7 @@ FCATFN_OK:
 
 ;--------------------------------------------------------
 ; 
-; send file name or directory name
+; Send file name or directory name
 ;
 ;--------------------------------------------------------
 SENDFNAME:      
@@ -9992,43 +9936,18 @@ DELAYDE:
                         jr nz,DELAYDE
                         ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; 
+; ROM data
 ; 
-; 
-                    ; removed converting from 
-                    ; asmz80.com to z80asm
-                    ;ORG    $8350
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ROMDATA:
-STR_ZTGSDC:          DB      "ZeTuGa80 SDc\n\r",0
-STR_OK:              DB      "OK\n\r",0
-STR_ERROR:           DB      "ERROR\n\r",0
-
-STR_CMD:             DB      ">",0
-STR_CMD_NOTFOUND:    DB      "Command not found",0
-
-STR_SDSTATUS_BAD:    DB      "Error: bad SDcIf status\n\r",0
-;STR_SDSTATUS_OK:    DB      "OK: SD card if status is good\n\r",0
-
-STR_LOADOK:          DB      "File loaded\n\r",0
-STR_SAVEOK:          DB      "File saved\n\r",0
-STR_DIROK:           DB      "List end!\n\r",0
-STR_REMOK:           DB      "File removed\n\r",0
-STR_RENOK:           DB      "File renamed\n\r",0
-STR_COPYOK:          DB      "File copied\n\r",0
-STR_EXISTOK:         DB      "File verified\n\r",0
-STR_MKDIROK:         DB      "Dir created\n\r",0
-STR_RMDIROK:         DB      "Dir removed\n\r",0
-STR_CHDIROK:         DB      "Dir changed\n\r",0
-STR_CWDOK:           DB      "Current dir\n\r",0
-STR_RESETOK:         DB      "SDcIf reset\n\r",0
-STR_SDIFSOK:         DB      "SDcIf status\n\r",0
-
-STR_COM:             DB      ".COM",0
-STR_EXE:             DB      ".EXE",0
 
 ;
-; command list
-; 
+; command table
+;
+
 CMD_RET:             DB      "RET",0 ; not real command, only handle return key only
 CMD_LOAD:            DB      "LOAD",0
 CMD_SAVE:            DB      "SAVE",0
@@ -10048,7 +9967,7 @@ CMD_FOPEN:           DB      "FOPEN",0
 CMD_FCLOSE:          DB      "FCLOSE",0
 CMD_FWRITE:          DB      "FWRITE",0
 CMD_FREAD:           DB      "FREAD",0
-CMD_FGETPOS:         DB      "FTELL",0 ;FGETPOS
+CMD_FGETPOS:         DB      "FTELL",0
 CMD_FSEEKSET:        DB      "FSEEKSET",0
 CMD_FSEEKCUR:        DB      "FSEEKCUR",0
 CMD_FSEEKEND:        DB      "FSEEKEND",0
@@ -10066,18 +9985,48 @@ CMD_FDSPACE:         DB      "FDSPACE",0
 CMD_TDSPACE:         DB      "TDSPACE",0
 
 ;
+; strings definition
+; 
+STR_ZTGSDC:          DB      "ztg80 SDcard OS\n\r",0
+STR_ZTGVER:          DB      "v1.07b\n\r",0
+
+STR_OK:              DB      "OK\n\r",0
+
+STR_CMD:             DB      ">",0
+STR_CMD_NOTFOUND:    DB      "Command not found",0
+
+STR_SDSTATUS_BAD:    DB      "Error: bad SDcIf status\n\r",0
+
+STR_LOADOK:          DB      "File loaded\n\r",0
+STR_SAVEOK:          DB      "File saved\n\r",0
+STR_DIROK:           DB      "List end!\n\r",0
+STR_REMOK:           DB      "File removed\n\r",0
+STR_RENOK:           DB      "File renamed\n\r",0
+STR_COPYOK:          DB      "File copied\n\r",0
+STR_EXISTOK:         DB      "File verified\n\r",0
+STR_MKDIROK:         DB      "Dir created\n\r",0
+STR_RMDIROK:         DB      "Dir removed\n\r",0
+STR_CHDIROK:         DB      "Dir changed\n\r",0
+STR_CWDOK:           DB      "Current dir\n\r",0
+STR_RESETOK:         DB      "SDcIf reset\n\r",0
+STR_SDIFSOK:         DB      "SDcIf status\n\r",0
+
+STR_COM:             DB      ".COM",0
+STR_EXE:             DB      ".EXE",0
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
 ; RAM zone - variables
 ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;                    ORG    $83E0
-;                    ORG    $FAE0
                     ORG    $FA00
-;                    ORG    $F000                  
+                
 RAMDATA:
 
 ; input
 FILE_START:         DS $02 ; 2 bytes : memory start address / file open mode
-FILE_LEN:           DS $02 ; 2 bytes
+FILE_LEN:           DS $02 ; 2 bytes : used as several purposes
 FILE_NAME:          DS $41 ; 65 bytes
 FILE_NAME1:         DS $41 ; 65 bytes
 FILE_OMODE:         DS $02 ; 2 bytes : NOT USED
@@ -10087,7 +10036,7 @@ FILE_HDL:           DS $02 ; 2 bytes (but for hdl only first is used)
 BYTES_RESERVED:     DS $0F ; 15 bytes
 
 ; output
-ERROR_CODE:         DS $01
+ERROR_CODE:         DS $01 ; : holds the error code, 0 is no error
 OUT_BYTE:           DS $01 ; : store operation byte output
 OUT_BYTE1:          DS $01 ; : store firmware byte operation result
 OUT_LONG:           DS $04 ; 4 bytes
@@ -10095,10 +10044,9 @@ NUM_BYTES:          DS $02 ; 2 bytes
 OUTBUFFER:          DS $41 ; 65 bytes
 
 ; cli wrk
-FILE_CMD:           DS $10 ; 16 bytes
-CLI_ORG:            DS $02
+FILE_CMD:           DS $10 ; 16 bytes: holds the command string
+CLI_ORG:            DS $02 ; 2 bytes: Default address for load and run commands .com & .exe
 TMP_BYTE:           DS $01 ; 1 byte: File handle id
-;TMP_BYTE1:          DS $01 ; 1 byte: 
 TMP_BYTE2:          DS $01 ; 1 byte: multi operation stage (operation that call others)
 TMP_WORD:           DS $02 ; 2 bytes
 
