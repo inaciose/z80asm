@@ -71,7 +71,7 @@ In debug mode this extra commands are also available on SCM app for testing.
 - fgetsize HH                                 handleid
 - fgetname HH                                 handleid
 
-Commands to add in C api (not in rom):  
+Commands to add in C api (not in rom, this info will be moved to the ztgsdcapi readme):  
 - bool 	isDir () const (can be constructed with fexist output)
 - bool 	isFile () const (can be constructed with fexist output)
 - int 	write (const char *str)
@@ -87,9 +87,9 @@ But older experiments show that can be like the basic file managment program api
 3. by using separate entries for the cli requests and other program requests
 
 The method used is based on:
-- store parameters on know memory positions
+- store parameters on know memory addresses
 - call routine at know memory position
-- read return output from know memory
+- read return output from know memory addresses
 
 I belive that the addresses are more stable now, need to compile them.
 
@@ -131,11 +131,14 @@ Possible options:
 Still stick at 3rd, and not forseen changes  
 
 # todo
+- remove unused variable FILE_OMODE (ztgsdcapi need to change input and output variable addresses)
+- set the base ram address to variables start in higher address (ztgsdcapi need to change input and output variable addresses)
 - on copy and rename commands, check if dst file exists, and check if is dir, if is dir dont copy 
 - make load quickier, (done a litle bit).
 - make save quickier
 - make it smaller (remove some push and pops of hl and de ???)
 - check the if the hex entries are valid
+- show stm32 firmware version at startup (ex: 1.07a = 10701 / 1.10c = 11003) requires firwmare update
 
 # operations status and command codes
 https://docs.google.com/spreadsheets/d/1EDnzh6c8GuFteZskviRQ0HXl_1hdd2McFDgUcx4P_4A/edit?usp=sharing
